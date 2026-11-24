@@ -1,3 +1,5 @@
+import { labelsFor } from "./labels.ts";
+
 export type Speaker = "me" | "others";
 
 /** A stretch of speech, in seconds from the start of the recording. */
@@ -18,8 +20,6 @@ export interface Transcript {
 
 /** Segments from the same speaker closer than this are joined into one turn. */
 const MAX_PAUSE_WITHIN_TURN = 2;
-
-const SPEAKER_LABELS: Record<Speaker, string> = { me: "Me", others: "Others" };
 
 /**
  * Interleaves the per-track segments by start time and joins consecutive
@@ -43,11 +43,16 @@ export function mergeTracks(tracks: Record<Speaker, Segment[]>): Turn[] {
   return turns;
 }
 
+/** The conversation as Markdown paragraphs, one per turn, without a heading. */
+export function renderTurns(transcript: Transcript): string {
+  const labels = labelsFor(transcript.language);
+  return transcript.turns
+    .map((turn) => `**[${formatTime(turn.start)}] ${labels[turn.speaker]}:** ${turn.text}`)
+    .join("\n\n");
+}
+
 export function renderTranscript(transcript: Transcript): string {
-  const lines = transcript.turns.map(
-    (turn) => `**[${formatTime(turn.start)}] ${SPEAKER_LABELS[turn.speaker]}:** ${turn.text}`,
-  );
-  return `# Transcript\n\n${lines.join("\n\n")}\n`;
+  return `# ${labelsFor(transcript.language).transcript}\n\n${renderTurns(transcript)}\n`;
 }
 
 export function formatTime(seconds: number): string {

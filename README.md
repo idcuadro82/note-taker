@@ -40,15 +40,30 @@ The first run needs two permissions for your terminal app, under
 System Settings > Privacy & Security: **Microphone** and
 **Screen & System Audio Recording**. Restart the terminal after granting them.
 
-## Transcribing a recording
+## Turning a recording into notes
 
 ```bash
-bin/notes.js transcribe ~/Meetings/test
+bin/notes.js process ~/Meetings/test
 ```
 
-Reads `system.wav` and `mic.wav` from the folder and writes `transcript.json` and
-`transcript.md`: one conversation in order, with each turn labelled **Others** or **Me**.
-The language is detected automatically; force it with `--language es`.
+Reads `system.wav` and `mic.wav` from the folder and writes:
+
+- `transcript.json` and `transcript.md`: one conversation in order, with each turn
+  labelled as you or the other participants.
+- `notes.md`: title, summary, key points, decisions, action items, open questions
+  and the full transcript, in the language of the meeting.
+
+The two halves can be run separately with `notes transcribe` and `notes summarize`,
+for example to rewrite the notes with another model without transcribing again.
+
+| Option | Default | |
+|---|---|---|
+| `--language es` | auto-detect | Spoken language |
+| `--model gemma3:12b` | `qwen2.5:14b` | Ollama model that writes the notes |
+
+Ollama does not need to be running: it is started for the summary and stopped
+afterwards. The notes are written by a small local model, so check names, owners
+and dates against the transcript before relying on them.
 
 Run the tests with `npm test`.
 
