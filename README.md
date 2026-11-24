@@ -27,6 +27,19 @@ Models can be changed with environment variables:
 WHISPER_MODEL=medium OLLAMA_MODEL=gemma3:12b ./scripts/setup.sh
 ```
 
+## Recording audio
+
+```bash
+recorder/.build/release/audiocap ~/Meetings/test
+```
+
+Records until you press Ctrl+C and writes two aligned files (16 kHz, mono):
+`system.wav` (what the other participants say) and `mic.wav` (your microphone).
+
+The first run needs two permissions for your terminal app, under
+System Settings > Privacy & Security: **Microphone** and
+**Screen & System Audio Recording**. Restart the terminal after granting them.
+
 ## Where things live
 
 | What | Where | In git? |
