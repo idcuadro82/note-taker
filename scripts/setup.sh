@@ -21,17 +21,26 @@ fi
 echo "==> Homebrew dependencies"
 brew bundle --file="$REPO_DIR/Brewfile"
 
-echo "==> Whisper model ($WHISPER_MODEL)"
+# download <file-name> <url>: fetches into models/ unless it is already there.
+download() {
+  local target="$MODELS_DIR/$1"
+  if [[ -f "$target" ]]; then
+    echo "Already downloaded: $target"
+    return
+  fi
+  curl -L --fail --progress-bar -o "$target.part" "$2"
+  mv "$target.part" "$target"
+}
+
 mkdir -p "$MODELS_DIR"
-MODEL_FILE="$MODELS_DIR/ggml-$WHISPER_MODEL.bin"
-if [[ ! -f "$MODEL_FILE" ]]; then
-  curl -L --fail --progress-bar \
-    -o "$MODEL_FILE.part" \
-    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-$WHISPER_MODEL.bin"
-  mv "$MODEL_FILE.part" "$MODEL_FILE"
-else
-  echo "Already downloaded: $MODEL_FILE"
-fi
+
+echo "==> Whisper model ($WHISPER_MODEL)"
+download "ggml-$WHISPER_MODEL.bin" \
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-$WHISPER_MODEL.bin"
+
+echo "==> Voice activity detection model"
+download "ggml-silero-v5.1.2.bin" \
+  "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin"
 
 echo "==> Ollama model ($OLLAMA_MODEL)"
 if ! curl -s --max-time 2 http://localhost:11434/api/version >/dev/null; then
@@ -49,4 +58,4 @@ if [[ -f "$REPO_DIR/recorder/Package.swift" ]]; then
 fi
 
 echo
-echo "Done. Whisper model is in: $MODELS_DIR"
+echo "Done. Whisper models are in: $MODELS_DIR"

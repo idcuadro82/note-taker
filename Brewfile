@@ -1,2 +1,2 @@
-brew "whisper-cpp"
+brew "whisper.cpp"
 brew "ollama"

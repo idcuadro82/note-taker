@@ -20,7 +20,7 @@ cd note-taker
 ./scripts/setup.sh
 ```
 
-The script installs `whisper-cpp` and `ollama`, downloads the models and builds the recorder.
+The script installs `whisper.cpp` and `ollama`, downloads the models and builds the recorder.
 Models can be changed with environment variables:
 
 ```bash
@@ -40,12 +40,24 @@ The first run needs two permissions for your terminal app, under
 System Settings > Privacy & Security: **Microphone** and
 **Screen & System Audio Recording**. Restart the terminal after granting them.
 
+## Transcribing a recording
+
+```bash
+bin/notes.js transcribe ~/Meetings/test
+```
+
+Reads `system.wav` and `mic.wav` from the folder and writes `transcript.json` and
+`transcript.md`: one conversation in order, with each turn labelled **Others** or **Me**.
+The language is detected automatically; force it with `--language es`.
+
+Run the tests with `npm test`.
+
 ## Where things live
 
 | What | Where | In git? |
 |---|---|---|
 | Code | this repository | Yes |
-| Whisper model | `models/` in this repository (contents ignored by git) | No |
+| Whisper models | `models/` in this repository (contents ignored by git) | No |
 | Ollama model | Ollama's own store (`~/.ollama/models`) | No |
 | Recordings and notes | `~/Meetings/` | No |
 

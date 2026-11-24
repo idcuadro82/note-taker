@@ -1,0 +1,16 @@
+{
+  "name": "note-taker",
+  "version": "0.1.0",
+  "description": "Local, free AI meeting note taker for macOS",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "notes": "./bin/notes.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
