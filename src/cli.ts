@@ -3,6 +3,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { config, configFile } from "./config.ts";
+import { CAPTIONS_FILE, runCaptions } from "./live.ts";
+import type { CaptionEvent } from "./live.ts";
 import { currentRecording, meetingsDir, startRecording, stopRecording } from "./session.ts";
 import { renderNotes, summarize } from "./summarize.ts";
 import { transcribeMeeting } from "./transcribe.ts";
@@ -11,6 +13,8 @@ import type { Transcript } from "./transcript.ts";
 
 const USAGE = `Usage:
   notes start [title]              Start recording a meeting
+  notes start [title] --live       Start recording with live captions
+  notes captions                   Show the live captions of the recording in progress
   notes stop                       Stop recording and write the notes
   notes status                     Show whether a recording is in progress
 
@@ -43,6 +47,7 @@ export async function main(argv: string[]): Promise<void> {
       model: { type: "string", default: config.model },
       "no-notes": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
+      live: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
   });
@@ -55,7 +60,14 @@ export async function main(argv: string[]): Promise<void> {
 
   switch (command) {
     case "start":
-      return start(rest.join(" "));
+      return start(rest.join(" "), values.live);
+    case "captions":
+      if (rest.length > 0) break;
+      return followCaptions();
+    case "_captions":
+      // Internal: the background process started by "notes start --live".
+      if (rest.length !== 2) break;
+      return runCaptions(path.resolve(rest[0]), Number(rest[1]), values.language);
     case "stop":
       if (rest.length > 0) break;
       return stop(values, values["no-notes"]);
@@ -76,10 +88,33 @@ export async function main(argv: string[]): Promise<void> {
   throw new Error(USAGE);
 }
 
-async function start(title: string): Promise<void> {
-  const recording = await startRecording(title);
+async function start(title: string, live: boolean): Promise<void> {
+  const recording = await startRecording(title, live);
   log(`Recording to ${recording.dir}`);
+  if (live) log('Live captions are on: run "notes captions" to read them here.');
   log('Run "notes stop" when the meeting ends.');
+}
+
+/** Prints each caption once it is complete, until the recording ends. */
+async function followCaptions(): Promise<void> {
+  const recording = await currentRecording();
+  if (!recording || recording.interrupted) throw new Error("Not recording.");
+  if (!recording.captionsPid) {
+    throw new Error('This recording has no live captions. Start it with "notes start --live".');
+  }
+  const file = path.join(recording.dir, CAPTIONS_FILE);
+  let printed = 0;
+  for (;;) {
+    const lines = existsSync(file) ? (await readFile(file, "utf8")).split("\n").filter(Boolean) : [];
+    for (const line of lines.slice(printed)) {
+      const event = JSON.parse(line) as CaptionEvent;
+      if (event.final && event.text) console.log(`[${formatTime(event.start)}] ${event.label}: ${event.text}`);
+    }
+    printed = lines.length;
+    const current = await currentRecording();
+    if (!current || current.interrupted || current.dir !== recording.dir) return;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
 }
 
 async function stop(options: Options, skipNotes: boolean): Promise<void> {
@@ -100,7 +135,15 @@ async function status(json: boolean): Promise<void> {
   if (json) {
     // Read by the menu bar app.
     const state = !recording ? "idle" : recording.interrupted ? "interrupted" : "recording";
-    console.log(JSON.stringify({ state, meetingsDir, dir: recording?.dir, startedAt: recording?.startedAt }));
+    console.log(
+      JSON.stringify({
+        state,
+        meetingsDir,
+        dir: recording?.dir,
+        startedAt: recording?.startedAt,
+        captions: recording?.captionsPid ? path.join(recording.dir, CAPTIONS_FILE) : undefined,
+      }),
+    );
     return;
   }
   if (!recording) {

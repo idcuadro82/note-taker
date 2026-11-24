@@ -1,6 +1,6 @@
 import AppKit
 
-// NoteTaker: a menu bar icon to start and stop meeting recordings.
+// NoteTaker: a menu bar icon to start and stop meeting recordings, with live captions.
 //
 // `NoteTaker --exec <notes arguments>` runs a command through the app's own
 // runner and prints the result, to check the app's setup from a terminal.

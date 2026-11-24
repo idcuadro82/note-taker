@@ -56,6 +56,23 @@ The first run needs two permissions for your terminal app, under
 System Settings > Privacy & Security: **Microphone** and
 **Screen & System Audio Recording**. Restart the terminal after granting them.
 
+## Live captions
+
+```bash
+bin/notes.js start "Weekly sync" --live
+```
+
+Shows what is being said while the meeting happens, two to three seconds behind:
+in a floating window if the menu bar app is open, or in the terminal with
+`notes captions`. The text of whoever is talking appears dimmed and is corrected as
+they go on. The window is hidden from screen sharing and screenshots.
+
+The captions are a quick draft. When the recording stops, the whole meeting is
+transcribed again more carefully for the notes.
+
+Whisper works during the whole meeting, so expect more battery and CPU use than
+a plain recording.
+
 ## Menu bar app
 
 ```bash
@@ -63,9 +80,10 @@ open build/NoteTaker.app
 ```
 
 Adds a microphone icon to the menu bar to start and stop recordings without a
-terminal. While recording it shows a red dot and the elapsed time; while the notes
-are being written, the menu shows the progress. From the menu you can also open the
-last notes, open the meetings folder and make the app start at login.
+terminal, with or without live captions. While recording it shows a red dot and
+the elapsed time; while the notes are being written, the menu shows the progress.
+From the menu you can also open the last notes, open the meetings folder and make
+the app start at login.
 
 It runs the same `notes` commands, so the terminal and the icon can be mixed.
 
@@ -83,6 +101,7 @@ upgrading Node or moving this folder; macOS may ask for the permissions again.
 | Command | |
 |---|---|
 | `notes status` | Shows whether a recording is in progress |
+| `notes captions` | Follows the live captions of the recording in progress |
 | `notes stop --no-notes` | Stops and keeps the audio without processing it |
 | `notes process <folder>` | Transcribes and summarizes a recorded meeting |
 | `notes transcribe <folder>` | Only writes the transcript |

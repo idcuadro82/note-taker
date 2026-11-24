@@ -4,7 +4,8 @@ import ServiceManagement
 /// What the app is doing, as shown in the menu bar.
 enum RecorderState: Equatable {
     case idle
-    case recording(since: Date, directory: String)
+    /// `captions` is the live captions file, when the recording has them.
+    case recording(since: Date, directory: String, captions: String?)
     /// A recording whose recorder died; `notes stop` recovers its audio.
     case interrupted(directory: String)
     case writingNotes(directory: String)
@@ -21,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var busy = false
     private var clock: Timer?
     private var poll: Timer?
+    private let captionsPanel = CaptionsPanel()
 
     private var lastNotes: String? {
         get { UserDefaults.standard.string(forKey: "lastNotes") }
@@ -47,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let meetingsDir: String
         let dir: String?
         let startedAt: String?
+        let captions: String?
     }
 
     /// Asks the command line tool what is going on.
@@ -68,11 +71,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let formatter = ISO8601DateFormatter()
                 formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                 let since = status.startedAt.flatMap(formatter.date(from:)) ?? Date()
-                self.state = .recording(since: since, directory: directory)
+                self.state = .recording(since: since, directory: directory, captions: status.captions)
             case ("interrupted", let directory?):
                 self.state = .interrupted(directory: directory)
             default:
                 self.state = .idle
+            }
+            if case .recording(_, _, let captions?) = self.state {
+                // Also when the recording was started from the terminal.
+                self.captionsPanel.follow(file: captions)
+            } else {
+                self.captionsPanel.close()
             }
             self.render()
         }
@@ -81,29 +90,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Actions
 
     @objc private func startRecording() {
-        start(title: "")
+        start(title: "", live: false)
+    }
+
+    @objc private func startRecordingWithCaptions() {
+        start(title: "", live: true)
+    }
+
+    @objc private func showCaptions() {
+        captionsPanel.show()
     }
 
     @objc private func startRecordingWithTitle() {
         let alert = NSAlert()
         alert.messageText = "Meeting title"
         alert.informativeText = "Used to name the meeting folder."
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        alert.accessoryView = field
+        let field = NSTextField(frame: NSRect(x: 0, y: 28, width: 260, height: 24))
+        let live = NSButton(checkboxWithTitle: "Live captions", target: nil, action: nil)
+        live.frame = NSRect(x: 0, y: 0, width: 260, height: 20)
+        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 52))
+        accessory.addSubview(field)
+        accessory.addSubview(live)
+        alert.accessoryView = accessory
         alert.addButton(withTitle: "Start Recording")
         alert.addButton(withTitle: "Cancel")
         alert.window.initialFirstResponder = field
         NSApp.activate(ignoringOtherApps: true)
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        start(title: field.stringValue)
+        start(title: field.stringValue, live: live.state == .on)
     }
 
-    private func start(title: String) {
+    private func start(title: String, live: Bool) {
         guard let cli, !busy else { return }
         busy = true
         progress = "Starting…"
         render()
-        cli.run(title.isEmpty ? ["start"] : ["start", title]) { [weak self] result in
+        let arguments = ["start"] + (title.isEmpty ? [] : [title]) + (live ? ["--live"] : [])
+        cli.run(arguments) { [weak self] result in
             guard let self else { return }
             self.busy = false
             self.progress = ""
@@ -125,10 +148,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let cli, !busy else { return }
         let directory: String
         switch state {
-        case .recording(_, let dir), .interrupted(let dir): directory = dir
+        case .recording(_, let dir, _), .interrupted(let dir): directory = dir
         default: return
         }
         busy = true
+        captionsPanel.close()
         state = .writingNotes(directory: directory)
         progress = writeNotes ? "Stopping…" : "Saving…"
         render()
@@ -224,10 +248,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 add(busy ? progress : "Not recording", nil)
                 menu.addItem(.separator())
                 add("Start Recording", #selector(startRecording), enabled: !busy)
+                add("Start Recording with Live Captions", #selector(startRecordingWithCaptions), enabled: !busy)
                 add("Start Recording with Title…", #selector(startRecordingWithTitle), enabled: !busy)
-            case .recording(_, let directory):
+            case .recording(_, let directory, let captions):
                 add("Recording: " + (directory as NSString).lastPathComponent, nil)
                 menu.addItem(.separator())
+                if captions != nil { add("Show Live Captions", #selector(showCaptions)) }
                 add("Stop and Write Notes", #selector(stopAndWriteNotes), enabled: !busy)
                 add("Stop without Notes", #selector(stopWithoutNotes), enabled: !busy)
             case .interrupted(let directory):
@@ -263,7 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch state {
         case _ where startupError != nil: symbol = "exclamationmark.triangle"
         case .idle: symbol = "mic"
-        case .recording(let since, _):
+        case .recording(let since, _, _):
             symbol = "record.circle.fill"
             title = " " + Self.elapsed(since: since)
         case .interrupted: symbol = "exclamationmark.triangle"

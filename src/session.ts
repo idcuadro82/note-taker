@@ -3,7 +3,7 @@ import { existsSync, openSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { config } from "./config.ts";
-import { recorderPath } from "./paths.ts";
+import { recorderPath, repoRoot } from "./paths.ts";
 import { run } from "./process.ts";
 
 /** Where meetings are stored: one folder per meeting. */
@@ -19,10 +19,15 @@ export interface Recording {
   pid: number;
   dir: string;
   startedAt: string;
+  /** Process writing live captions, when the recording was started with them. */
+  captionsPid?: number;
 }
 
-/** Starts recording in the background and returns once audio is being captured. */
-export async function startRecording(title: string, now = new Date()): Promise<Recording> {
+/**
+ * Starts recording in the background and returns once audio is being captured.
+ * With `live`, a second background process writes captions while it records.
+ */
+export async function startRecording(title: string, live = false, now = new Date()): Promise<Recording> {
   const previous = await readState();
   if (previous) {
     throw new Error(
@@ -50,7 +55,8 @@ export async function startRecording(title: string, now = new Date()): Promise<R
   while (Date.now() < deadline) {
     const output = await readFile(logFile, "utf8");
     if (output.includes("Recording to")) {
-      const recording = { pid, dir, startedAt: now.toISOString() };
+      const recording: Recording = { pid, dir, startedAt: now.toISOString() };
+      if (live) recording.captionsPid = startCaptions(dir, pid);
       await writeFile(stateFile, `${JSON.stringify(recording, null, 2)}\n`);
       return recording;
     }
@@ -73,6 +79,15 @@ export async function stopRecording(): Promise<Recording & { interrupted: boolea
   const recording = await readState();
   if (!recording) throw new Error('Not recording. Run "notes start" first.');
 
+  // The captions are not needed any more, and the final transcription wants the GPU.
+  if (recording.captionsPid) {
+    try {
+      process.kill(recording.captionsPid, "SIGTERM");
+    } catch {
+      // already gone
+    }
+  }
+
   const wasAlive = await isRecorderAlive(recording.pid);
   if (wasAlive) {
     process.kill(recording.pid, "SIGINT");
@@ -88,6 +103,18 @@ export async function stopRecording(): Promise<Recording & { interrupted: boolea
 export async function currentRecording(): Promise<(Recording & { interrupted: boolean }) | undefined> {
   const recording = await readState();
   return recording && { ...recording, interrupted: !(await isRecorderAlive(recording.pid)) };
+}
+
+/** Starts the process that follows the recording and writes its captions. */
+function startCaptions(dir: string, recorderPid: number): number | undefined {
+  const logFd = openSync(path.join(dir, "captions.log"), "w");
+  const child = spawn(
+    process.execPath,
+    [path.join(repoRoot, "bin", "notes.js"), "_captions", dir, String(recorderPid)],
+    { detached: true, stdio: ["ignore", logFd, logFd] },
+  );
+  child.unref();
+  return child.pid;
 }
 
 /** Folder name for a meeting: local date and time, plus the title if given. */
