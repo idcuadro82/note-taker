@@ -53,7 +53,13 @@ NODE="$NODE" REPO="$REPO_DIR" EXTRA_PATH="$BREW_BIN" "$NODE" -e '
   process.stdout.write(JSON.stringify({ node: NODE, repo: REPO, extraPath: EXTRA_PATH }, null, 2) + "\n");
 ' > "$APP/Contents/Resources/paths.json"
 
-codesign --force --sign - "$APP" 2>/dev/null
+# macOS ties the recording permissions to the app's signature. A plain local
+# signature identifies the app by the hash of its code, so every rebuild would
+# look like a new app and lose them. Identifying it by its bundle id instead
+# keeps the permissions across rebuilds.
+codesign --force --sign - \
+  -r='designated => identifier "local.note-taker.menubar"' \
+  "$APP" 2>/dev/null
 
 echo "Built $APP"
 echo "Open it with: open \"$APP\""
