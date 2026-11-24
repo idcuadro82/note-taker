@@ -1,0 +1,20 @@
+# Recordings, transcripts and notes: never committed
+*.wav
+*.caf
+*.m4a
+meetings/
+
+# Models
+*.bin
+*.gguf
+models/
+
+# Build output
+.build/
+node_modules/
+dist/
+
+# Local config and system files
+config.local.json
+.env
+.DS_Store
