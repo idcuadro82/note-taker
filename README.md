@@ -27,34 +27,42 @@ Models can be changed with environment variables:
 WHISPER_MODEL=medium OLLAMA_MODEL=qwen2.5:14b ./scripts/setup.sh
 ```
 
-## Recording audio
+## Usage
 
 ```bash
-recorder/.build/release/audiocap ~/Meetings/test
+bin/notes.js start "Weekly sync"   # when the meeting begins (the title is optional)
+bin/notes.js stop                  # when it ends: transcribes and writes the notes
 ```
 
-Records until you press Ctrl+C and writes two aligned files (16 kHz, mono):
-`system.wav` (what the other participants say) and `mic.wav` (your microphone).
+Run `npm link` once in this folder to use `notes` instead of `bin/notes.js`.
+
+Each meeting gets its own folder in `~/Meetings` (override with `NOTES_DIR`),
+named after the date, time and title, for example `2026-11-23-0930-weekly-sync/`:
+
+| File | Content |
+|---|---|
+| `notes.md` | Title, summary, key points, decisions, action items, open questions and the full transcript, in the language of the meeting |
+| `transcript.md`, `transcript.json` | The conversation in order, each turn labelled as you or the other participants |
+| `system.wav`, `mic.wav` | The audio: the other participants and your microphone (16 kHz, mono) |
+
+The recording runs in the background, so the terminal can be used or closed
+meanwhile. It works with any app (Slack, Teams, Google Meet, Zoom...) because it
+captures the audio of the whole system. Use headphones: with speakers, the
+microphone also picks up the other participants.
 
 The first run needs two permissions for your terminal app, under
 System Settings > Privacy & Security: **Microphone** and
 **Screen & System Audio Recording**. Restart the terminal after granting them.
 
-## Turning a recording into notes
+Other commands:
 
-```bash
-bin/notes.js process ~/Meetings/test
-```
-
-Reads `system.wav` and `mic.wav` from the folder and writes:
-
-- `transcript.json` and `transcript.md`: one conversation in order, with each turn
-  labelled as you or the other participants.
-- `notes.md`: title, summary, key points, decisions, action items, open questions
-  and the full transcript, in the language of the meeting.
-
-The two halves can be run separately with `notes transcribe` and `notes summarize`,
-for example to rewrite the notes with another model without transcribing again.
+| Command | |
+|---|---|
+| `notes status` | Shows whether a recording is in progress |
+| `notes stop --no-notes` | Stops and keeps the audio without processing it |
+| `notes process <folder>` | Transcribes and summarizes a recorded meeting |
+| `notes transcribe <folder>` | Only writes the transcript |
+| `notes summarize <folder>` | Only rewrites the notes from the transcript |
 
 | Option | Default | |
 |---|---|---|
@@ -64,6 +72,8 @@ for example to rewrite the notes with another model without transcribing again.
 Ollama does not need to be running: it is started for the summary and stopped
 afterwards. The notes are written by a small local model, so check names, owners
 and dates against the transcript before relying on them.
+
+If the recorder dies mid-meeting, `notes stop` recovers the audio saved until then.
 
 Run the tests with `npm test`.
 
@@ -75,14 +85,3 @@ Run the tests with `npm test`.
 | Whisper models | `models/` in this repository (contents ignored by git) | No |
 | Ollama model | Ollama's own store (`~/.ollama/models`) | No |
 | Recordings and notes | `~/Meetings/` | No |
-
-## Status
-
-Work in progress. Planned steps:
-
-1. Environment setup (`scripts/setup.sh`)
-2. Audio recorder in Swift (`recorder/`)
-3. Transcription with Whisper
-4. Summarization with Ollama
-5. `notes start` / `notes stop` CLI
-6. Robustness and configuration
