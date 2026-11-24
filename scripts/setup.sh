@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-DATA_DIR="${NOTE_TAKER_HOME:-$HOME/.local/share/note-taker}"
+MODELS_DIR="$REPO_DIR/models"
 WHISPER_MODEL="${WHISPER_MODEL:-large-v3-turbo}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:14b}"
 
@@ -22,8 +22,8 @@ echo "==> Homebrew dependencies"
 brew bundle --file="$REPO_DIR/Brewfile"
 
 echo "==> Whisper model ($WHISPER_MODEL)"
-mkdir -p "$DATA_DIR/models"
-MODEL_FILE="$DATA_DIR/models/ggml-$WHISPER_MODEL.bin"
+mkdir -p "$MODELS_DIR"
+MODEL_FILE="$MODELS_DIR/ggml-$WHISPER_MODEL.bin"
 if [[ ! -f "$MODEL_FILE" ]]; then
   curl -L --fail --progress-bar \
     -o "$MODEL_FILE.part" \
@@ -49,4 +49,4 @@ if [[ -f "$REPO_DIR/recorder/Package.swift" ]]; then
 fi
 
 echo
-echo "Done. Models are in: $DATA_DIR/models"
+echo "Done. Whisper model is in: $MODELS_DIR"

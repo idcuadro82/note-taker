@@ -4,10 +4,11 @@
 *.m4a
 meetings/
 
-# Models
+# Models: keep the folder, ignore everything inside it
+models/*
+!models/.gitkeep
 *.bin
 *.gguf
-models/
 
 # Build output
 .build/

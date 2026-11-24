@@ -32,7 +32,8 @@ WHISPER_MODEL=medium OLLAMA_MODEL=gemma3:12b ./scripts/setup.sh
 | What | Where | In git? |
 |---|---|---|
 | Code | this repository | Yes |
-| Models | `~/.local/share/note-taker/models` and Ollama | No |
+| Whisper model | `models/` in this repository (contents ignored by git) | No |
+| Ollama model | Ollama's own store (`~/.ollama/models`) | No |
 | Recordings and notes | `~/Meetings/` | No |
 
 ## Status
