@@ -1,5 +1,4 @@
-import { existsSync } from "node:fs";
-import { embeddingModelPath, segmentationModelPath } from "./paths.ts";
+import { embeddingModelPath, requireModels, segmentationModelPath } from "./paths.ts";
 import type { Range } from "./vad.ts";
 
 /** A stretch of audio spoken by one person; people are numbered from 1. */
@@ -24,11 +23,7 @@ const MIN_PIECE_SECONDS = 0.5;
  * and numbers the groups.
  */
 export async function findVoices(samples: Int16Array): Promise<Voice[]> {
-  for (const model of [segmentationModelPath, embeddingModelPath]) {
-    if (!existsSync(model)) {
-      throw new Error(`Model not found: ${model}\nRun ./scripts/setup.sh to download it.`);
-    }
-  }
+  requireModels(segmentationModelPath, embeddingModelPath);
   let sherpa;
   try {
     // Loaded on demand: the rest of the tool works without this dependency.
@@ -48,7 +43,7 @@ export async function findVoices(samples: Int16Array): Promise<Voice[]> {
   const audio = new Float32Array(samples.length);
   for (let i = 0; i < samples.length; i++) audio[i] = samples[i] / 32768;
 
-  const segments = diarization.process(audio) as { start: number; end: number; speaker: number }[];
+  const segments = diarization.process(audio);
   return segments.map((segment) => ({ start: segment.start, end: segment.end, person: segment.speaker + 1 }));
 }
 

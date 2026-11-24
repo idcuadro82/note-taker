@@ -1,32 +1,6 @@
 import AppKit
 import ServiceManagement
 
-/// What the app is doing, as shown in the menu bar.
-enum RecorderState: Equatable {
-    case idle
-    /// `captions` is the live captions file, when the recording has them.
-    case recording(since: Date, directory: String, captions: String?)
-    /// A recording whose recorder died; `notes stop` recovers its audio.
-    case interrupted(directory: String)
-    case writingNotes(directory: String)
-}
-
-/// What to do with a recording when it stops.
-enum StopMode {
-    case notes
-    /// The transcript without the notes: far lighter, the model is never loaded.
-    case transcriptOnly
-    case audioOnly
-
-    var arguments: [String] {
-        switch self {
-        case .notes: return ["stop"]
-        case .transcriptOnly: return ["stop", "--transcript-only"]
-        case .audioOnly: return ["stop", "--no-notes"]
-        }
-    }
-}
-
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private var cli: NotesCLI?
@@ -63,22 +37,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: State
 
-    private struct Status: Decodable {
-        let state: String
-        let meetingsDir: String
-        let notes: Bool?
-        let dir: String?
-        let startedAt: String?
-        let captions: String?
-    }
-
     /// Asks the command line tool what is going on.
     private func refresh() {
         guard let cli, !busy else { return }
         cli.run(["status", "--json"]) { [weak self] result in
             guard let self, !self.busy else { return }
             guard result.succeeded,
-                  let status = try? JSONDecoder().decode(Status.self, from: Data(result.output.utf8))
+                  let status = try? JSONDecoder().decode(CLIStatus.self, from: Data(result.output.utf8))
             else {
                 self.startupError = result.errorOutput.isEmpty ? "Could not read the status." : result.errorOutput
                 self.render()
@@ -87,17 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.startupError = nil
             self.meetingsDirectory = status.meetingsDir
             self.notesEnabled = status.notes ?? true
-            switch (status.state, status.dir) {
-            case ("recording", let directory?):
-                let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                let since = status.startedAt.flatMap(formatter.date(from:)) ?? Date()
-                self.state = .recording(since: since, directory: directory, captions: status.captions)
-            case ("interrupted", let directory?):
-                self.state = .interrupted(directory: directory)
-            default:
-                self.state = .idle
-            }
+            self.state = status.recorderState
             if case .recording(_, _, let captions?) = self.state {
                 // Also when the recording was started from the terminal.
                 self.captionsPanel.follow(file: captions)
@@ -108,21 +63,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: Actions
+    // MARK: Actions (the menu items call these)
 
-    @objc private func startRecording() {
+    @objc func startRecording() {
         start(title: "", live: false)
     }
 
-    @objc private func startRecordingWithCaptions() {
+    @objc func startRecordingWithCaptions() {
         start(title: "", live: true)
     }
 
-    @objc private func showCaptions() {
+    @objc func showCaptions() {
         captionsPanel.show()
     }
 
-    @objc private func startRecordingWithTitle() {
+    @objc func startRecordingWithTitle() {
         let alert = NSAlert()
         alert.messageText = "Meeting title"
         alert.informativeText = "Used to name the meeting folder."
@@ -157,15 +112,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func stopAndWriteNotes() {
+    @objc func stopAndWriteNotes() {
         stop(notesEnabled ? .notes : .transcriptOnly)
     }
 
-    @objc private func stopAndTranscribeOnly() {
+    @objc func stopAndTranscribeOnly() {
         stop(.transcriptOnly)
     }
 
-    @objc private func stopWithoutNotes() {
+    @objc func stopWithoutNotes() {
         stop(.audioOnly)
     }
 
@@ -208,19 +163,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    @objc private func openLastNotes() {
+    @objc func openLastNotes() {
         guard let lastNotes else { return }
         NSWorkspace.shared.open(URL(fileURLWithPath: lastNotes))
     }
 
-    @objc private func openMeetingsFolder() {
+    @objc func openMeetingsFolder() {
         guard let meetingsDirectory else { return }
         let url = URL(fileURLWithPath: meetingsDirectory, isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         NSWorkspace.shared.open(url)
     }
 
-    @objc private func toggleStartAtLogin() {
+    @objc func toggleStartAtLogin() {
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
@@ -258,95 +213,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func render() {
         renderTitle()
-
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        func add(_ title: String, _ action: Selector?, enabled: Bool = true) {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-            item.target = self
-            item.isEnabled = enabled && action != nil
-            menu.addItem(item)
-        }
-
-        if let startupError {
-            add(startupError, nil)
-        } else {
-            switch state {
-            case .idle:
-                add(busy ? progress : "Not recording", nil)
-                menu.addItem(.separator())
-                add("Start Recording", #selector(startRecording), enabled: !busy)
-                add("Start Recording with Live Captions", #selector(startRecordingWithCaptions), enabled: !busy)
-                add("Start Recording with Title…", #selector(startRecordingWithTitle), enabled: !busy)
-            case .recording(_, let directory, let captions):
-                add("Recording: " + (directory as NSString).lastPathComponent, nil)
-                menu.addItem(.separator())
-                if captions != nil { add("Show Live Captions", #selector(showCaptions)) }
-                if notesEnabled { add("Stop and Write Notes", #selector(stopAndWriteNotes), enabled: !busy) }
-                add("Stop and Transcribe Only", #selector(stopAndTranscribeOnly), enabled: !busy)
-                add("Stop without Processing", #selector(stopWithoutNotes), enabled: !busy)
-            case .interrupted(let directory):
-                add("Interrupted: " + (directory as NSString).lastPathComponent, nil)
-                menu.addItem(.separator())
-                if notesEnabled { add("Recover and Write Notes", #selector(stopAndWriteNotes), enabled: !busy) }
-                add("Recover and Transcribe Only", #selector(stopAndTranscribeOnly), enabled: !busy)
-                add("Recover without Processing", #selector(stopWithoutNotes), enabled: !busy)
-            case .writingNotes:
-                switch stopMode {
-                case .notes: add("Writing notes…", nil)
-                case .transcriptOnly: add("Transcribing…", nil)
-                case .audioOnly: add("Saving…", nil)
-                }
-                if !progress.isEmpty { add(progress, nil) }
-            }
-        }
-
-        menu.addItem(.separator())
-        add("Open Last Notes", #selector(openLastNotes), enabled: lastNotes.map(FileManager.default.fileExists(atPath:)) ?? false)
-        add("Open Meetings Folder", #selector(openMeetingsFolder), enabled: meetingsDirectory != nil)
-        menu.addItem(.separator())
-        let login = NSMenuItem(title: "Start at Login", action: #selector(toggleStartAtLogin), keyEquivalent: "")
-        login.target = self
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        menu.addItem(login)
-        add("Quit NoteTaker", #selector(NSApplication.terminate(_:)))
-        menu.items.last?.target = NSApp
-
-        statusItem.menu = menu
+        let content = MenuContent(
+            state: state,
+            stopMode: stopMode,
+            progress: progress,
+            busy: busy,
+            error: startupError,
+            notesEnabled: notesEnabled,
+            canOpenLastNotes: lastNotes.map(FileManager.default.fileExists(atPath:)) ?? false,
+            canOpenMeetingsFolder: meetingsDirectory != nil,
+            startsAtLogin: SMAppService.mainApp.status == .enabled
+        )
+        statusItem.menu = StatusMenu.menu(showing: content, target: self)
     }
 
     /// Icon and, while recording, the elapsed time next to it.
     private func renderTitle() {
         guard let button = statusItem.button else { return }
-        let symbol: String
-        var title = ""
-        switch state {
-        case _ where startupError != nil: symbol = "exclamationmark.triangle"
-        case .idle: symbol = "mic"
-        case .recording(let since, _, _):
-            symbol = "record.circle.fill"
-            title = " " + Self.elapsed(since: since)
-        case .interrupted: symbol = "exclamationmark.triangle"
-        case .writingNotes: symbol = "ellipsis.circle"
-        }
-        var image = NSImage(systemSymbolName: symbol, accessibilityDescription: "NoteTaker")
-        if case .recording = state {
-            // A red dot, like the system's own recording indicators. The other
-            // icons are templates, so they follow the menu bar's colour.
-            image = image?.withSymbolConfiguration(.init(paletteColors: [.systemRed]))
-            image?.isTemplate = false
-        } else {
-            image?.isTemplate = true
-        }
-        button.image = image
-        button.title = title
-    }
-
-    private static func elapsed(since: Date) -> String {
-        let total = max(0, Int(Date().timeIntervalSince(since)))
-        let (hours, minutes, seconds) = (total / 3600, total / 60 % 60, total % 60)
-        return hours > 0
-            ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
-            : String(format: "%d:%02d", minutes, seconds)
+        StatusMenu.update(button, state: state, hasError: startupError != nil)
     }
 }

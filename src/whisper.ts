@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { whisperModelPath } from "./paths.ts";
+import { requireModels, whisperModelPath } from "./paths.ts";
 import { run } from "./process.ts";
 import type { Segment } from "./transcript.ts";
 
@@ -47,9 +47,7 @@ export async function transcribeClips(
   language: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<ClipTranscription[]> {
-  if (!existsSync(whisperModelPath)) {
-    throw new Error(`Model not found: ${whisperModelPath}\nRun ./scripts/setup.sh to download it.`);
-  }
+  requireModels(whisperModelPath);
 
   const results: ClipTranscription[] = [];
   for (let offset = 0; offset < wavPaths.length; offset += BATCH_SIZE) {

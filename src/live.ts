@@ -1,19 +1,16 @@
-import { spawn } from "node:child_process";
-import type { ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { appendFile, open } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
-import net from "node:net";
 import path from "node:path";
 import { labelsFor } from "./labels.ts";
-import { vadModelPath, whisperModelPath } from "./paths.ts";
-import { TRACK_FILES } from "./transcribe.ts";
-import { dropEcho } from "./transcript.ts";
+import { isAlive, sleep } from "./process.ts";
+import { dropEcho, TRACK_FILES } from "./transcript.ts";
 import type { Segment, Speaker } from "./transcript.ts";
 import { UtteranceTracker } from "./utterances.ts";
 import type { Utterance } from "./utterances.ts";
-import { encodeWav, SAMPLE_RATE } from "./wav.ts";
+import { SAMPLE_RATE } from "./wav.ts";
 import { isNotSpeech } from "./whisper.ts";
+import { WhisperServer } from "./whisper-server.ts";
 
 /** One line of the captions file. A later event with the same id replaces the earlier one. */
 export interface CaptionEvent {
@@ -37,8 +34,6 @@ const IDLE_SLEEP_MS = 200;
 const PARTIAL_STEP_SECONDS = 1;
 /** Shorter than this there is rarely a whole word to show yet. */
 const MIN_PARTIAL_SECONDS = 0.8;
-/** The server needs at least a second of audio: shorter clips are padded with silence. */
-const MIN_AUDIO_SECONDS = 1.2;
 /** The meeting language is fixed from the first audio at least this long... */
 const MIN_SECONDS_TO_DETECT_LANGUAGE = 2.5;
 /** ...in which the model is this sure of the language. */
@@ -134,12 +129,6 @@ export async function runCaptions(meetingDir: string, recorderPid: number, langu
   }
 }
 
-/** Joins the segments of a Whisper answer into one line of text. */
-export function cleanText(text: string): string {
-  // Segments are separated by newlines and can be split in the middle of a word.
-  return text.replace(/\n/g, "").replace(/\s+/g, " ").trim();
-}
-
 /** The utterance in progress that most needs its caption refreshed, if any. */
 function nextPartial(
   tracks: Record<Speaker, Track>,
@@ -195,113 +184,4 @@ class Track {
   async close(): Promise<void> {
     await this.handle?.close();
   }
-}
-
-/** A whisper.cpp server that keeps the model loaded, so each request takes well under a second. */
-class WhisperServer {
-  private readonly process: ChildProcess;
-  private readonly url: string;
-
-  private constructor(process: ChildProcess, url: string) {
-    this.process = process;
-    this.url = url;
-  }
-
-  static async start(): Promise<WhisperServer> {
-    for (const model of [whisperModelPath, vadModelPath]) {
-      if (!existsSync(model)) {
-        throw new Error(`Model not found: ${model}\nRun ./scripts/setup.sh to download it.`);
-      }
-    }
-    const port = await freePort();
-    const child = spawn(
-      "whisper-server",
-      [
-        "--model", whisperModelPath,
-        // Voice detection makes noise come back as empty text instead of invented words.
-        "--vad",
-        "--vad-model", vadModelPath,
-        "--suppress-nst",
-        // One decoding attempt per request keeps the delay predictable.
-        "--no-fallback",
-        "--language", "auto",
-        "--host", "127.0.0.1",
-        "--port", String(port),
-      ],
-      { stdio: "ignore" },
-    );
-    let failure: Error | undefined;
-    child.once("error", (error: NodeJS.ErrnoException) => {
-      failure =
-        error.code === "ENOENT"
-          ? new Error("whisper-server not found. Run ./scripts/setup.sh to install it.")
-          : error;
-    });
-    child.once("exit", (code) => {
-      failure ??= new Error(`whisper-server exited with code ${code}`);
-    });
-
-    const url = `http://127.0.0.1:${port}`;
-    const deadline = Date.now() + 60_000;
-    while (Date.now() < deadline) {
-      if (failure) throw failure;
-      try {
-        await fetch(url, { signal: AbortSignal.timeout(1000) });
-        return new WhisperServer(child, url);
-      } catch {
-        await sleep(250);
-      }
-    }
-    child.kill();
-    throw new Error("whisper-server did not start in time.");
-  }
-
-  /** Transcribes a clip. `language` is a code, or "auto" to also detect it. */
-  async transcribe(
-    samples: Int16Array,
-    language: string,
-  ): Promise<{ text: string; language?: string; languageProbability: number }> {
-    const padded = new Int16Array(Math.max(samples.length, MIN_AUDIO_SECONDS * SAMPLE_RATE));
-    padded.set(samples);
-    const form = new FormData();
-    form.set("file", new Blob([encodeWav(padded)], { type: "audio/wav" }), "audio.wav");
-    form.set("language", language);
-    form.set("temperature", "0.0");
-    // Detecting the language costs an extra pass, so it is only asked for while unknown.
-    form.set("response_format", language === "auto" ? "verbose_json" : "json");
-
-    const response = await fetch(`${this.url}/inference`, { method: "POST", body: form });
-    if (!response.ok) throw new Error(`whisper-server answered ${response.status}`);
-    const json = (await response.json()) as { text?: string; language_probabilities?: Record<string, number> };
-    const detected = Object.entries(json.language_probabilities ?? {}).sort((a, b) => b[1] - a[1])[0];
-    return { text: cleanText(json.text ?? ""), language: detected?.[0], languageProbability: detected?.[1] ?? 0 };
-  }
-
-  stop(): void {
-    this.process.kill();
-  }
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const probe = net.createServer();
-    probe.once("error", reject);
-    probe.listen(0, "127.0.0.1", () => {
-      const { port } = probe.address() as net.AddressInfo;
-      probe.close(() => resolve(port));
-    });
-  });
-}
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

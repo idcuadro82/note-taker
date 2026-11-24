@@ -3,16 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { assignPeople, findVoices } from "./diarize.ts";
-import { vadModelPath } from "./paths.ts";
-import { dropEcho, mergeTracks } from "./transcript.ts";
+import { requireModels, vadModelPath } from "./paths.ts";
+import { dropEcho, mergeTracks, TRACK_FILES } from "./transcript.ts";
 import type { Segment, Speaker, Transcript } from "./transcript.ts";
 import { detectSpeech, planClips } from "./vad.ts";
 import type { Range } from "./vad.ts";
 import { readWav, SAMPLE_RATE, writeWav } from "./wav.ts";
 import { transcribeClips } from "./whisper.ts";
-
-/** Which recorded file belongs to which speaker. */
-export const TRACK_FILES: Record<Speaker, string> = { others: "system.wav", me: "mic.wav" };
 
 /** whisper-cli refuses audio shorter than one second: pad short clips with silence. */
 const MIN_CLIP_SECONDS = 1.2;
@@ -39,9 +36,7 @@ export async function transcribeMeeting(
       throw new Error(`Missing ${file} in ${meetingDir}`);
     }
   }
-  if (!existsSync(vadModelPath)) {
-    throw new Error(`Model not found: ${vadModelPath}\nRun ./scripts/setup.sh to download it.`);
-  }
+  requireModels(vadModelPath);
 
   const workDir = await mkdtemp(path.join(os.tmpdir(), "note-taker-"));
   try {

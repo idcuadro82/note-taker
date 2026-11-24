@@ -2,15 +2,11 @@ import { spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { config } from "./config.ts";
 import { recorderPath, repoRoot } from "./paths.ts";
-import { run } from "./process.ts";
-
-/** Where meetings are stored: one folder per meeting. */
-export const meetingsDir = config.meetingsDir;
+import { run, sleep } from "./process.ts";
 
 /** Remembers the recording in progress between `notes start` and `notes stop`. */
-const stateFile = path.join(meetingsDir, ".recording.json");
+const STATE_FILE = ".recording.json";
 
 const START_TIMEOUT_MS = 30_000;
 const STOP_TIMEOUT_MS = 20_000;
@@ -25,10 +21,16 @@ export interface Recording {
 
 /**
  * Starts recording in the background and returns once audio is being captured.
- * With `live`, a second background process writes captions while it records.
+ * The meeting gets its own folder inside `meetingsDir`. With `live`, a second
+ * background process writes captions while it records.
  */
-export async function startRecording(title: string, live = false, now = new Date()): Promise<Recording> {
-  const previous = await readState();
+export async function startRecording(
+  meetingsDir: string,
+  title: string,
+  live = false,
+  now = new Date(),
+): Promise<Recording> {
+  const previous = await readState(meetingsDir);
   if (previous) {
     throw new Error(
       (await isRecorderAlive(previous.pid))
@@ -57,7 +59,7 @@ export async function startRecording(title: string, live = false, now = new Date
     if (output.includes("Recording to")) {
       const recording: Recording = { pid, dir, startedAt: now.toISOString() };
       if (live) recording.captionsPid = startCaptions(dir, pid);
-      await writeFile(stateFile, `${JSON.stringify(recording, null, 2)}\n`);
+      await writeFile(stateFile(meetingsDir), `${JSON.stringify(recording, null, 2)}\n`);
       return recording;
     }
     if (!(await isRecorderAlive(pid))) {
@@ -75,8 +77,8 @@ export async function startRecording(title: string, live = false, now = new Date
  * Stops the recording in progress and returns it. Also recovers a recording
  * whose recorder died: the audio written until then is still usable.
  */
-export async function stopRecording(): Promise<Recording & { interrupted: boolean }> {
-  const recording = await readState();
+export async function stopRecording(meetingsDir: string): Promise<Recording & { interrupted: boolean }> {
+  const recording = await readState(meetingsDir);
   if (!recording) throw new Error('Not recording. Run "notes start" first.');
 
   // The captions are not needed any more, and the final transcription wants the GPU.
@@ -95,13 +97,15 @@ export async function stopRecording(): Promise<Recording & { interrupted: boolea
     while ((await isRecorderAlive(recording.pid)) && Date.now() < deadline) await sleep(200);
     if (await isRecorderAlive(recording.pid)) process.kill(recording.pid, "SIGKILL");
   }
-  await rm(stateFile, { force: true });
+  await rm(stateFile(meetingsDir), { force: true });
   return { ...recording, interrupted: !wasAlive };
 }
 
 /** The recording that was started and not stopped yet, and whether it is still running. */
-export async function currentRecording(): Promise<(Recording & { interrupted: boolean }) | undefined> {
-  const recording = await readState();
+export async function currentRecording(
+  meetingsDir: string,
+): Promise<(Recording & { interrupted: boolean }) | undefined> {
+  const recording = await readState(meetingsDir);
   return recording && { ...recording, interrupted: !(await isRecorderAlive(recording.pid)) };
 }
 
@@ -139,9 +143,14 @@ export function slugify(text: string): string {
     .replace(/-+$/, "");
 }
 
-async function readState(): Promise<Recording | undefined> {
-  if (!existsSync(stateFile)) return undefined;
-  return JSON.parse(await readFile(stateFile, "utf8")) as Recording;
+function stateFile(meetingsDir: string): string {
+  return path.join(meetingsDir, STATE_FILE);
+}
+
+async function readState(meetingsDir: string): Promise<Recording | undefined> {
+  const file = stateFile(meetingsDir);
+  if (!existsSync(file)) return undefined;
+  return JSON.parse(await readFile(file, "utf8")) as Recording;
 }
 
 /** True if `pid` is running and is the recorder (pids get reused). */
@@ -152,8 +161,4 @@ async function isRecorderAlive(pid: number): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

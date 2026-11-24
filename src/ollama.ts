@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import type { ChildProcess } from "node:child_process";
+import { waitUntilReady } from "./process.ts";
 
 const BASE_URL = "http://127.0.0.1:11434";
 const STARTUP_TIMEOUT_MS = 30_000;
@@ -32,7 +32,7 @@ export async function withOllama<T>(task: () => Promise<T>): Promise<T> {
   const stop = () => server.kill();
   process.once("exit", stop);
   try {
-    await waitUntilRunning(server);
+    await waitUntilReady(server, "ollama", isRunning, STARTUP_TIMEOUT_MS);
     return await task();
   } finally {
     stop();
@@ -103,23 +103,4 @@ async function isRunning(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function waitUntilRunning(server: ChildProcess): Promise<void> {
-  let failure: Error | undefined;
-  server.once("error", (error: NodeJS.ErrnoException) => {
-    failure =
-      error.code === "ENOENT" ? new Error("ollama not found. Run ./scripts/setup.sh to install it.") : error;
-  });
-  server.once("exit", (code) => {
-    failure ??= new Error(`ollama serve exited with code ${code}`);
-  });
-
-  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    if (failure) throw failure;
-    if (await isRunning()) return;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error("Ollama did not start in time.");
 }

@@ -46,7 +46,7 @@ export async function writeWav(filePath: string, samples: Int16Array): Promise<v
 }
 
 /** The bytes of a 16 kHz, mono, 16-bit PCM WAV file with these samples. */
-export function encodeWav(samples: Int16Array): Buffer {
+export function encodeWav(samples: Int16Array): Buffer<ArrayBuffer> {
   const dataBytes = samples.length * 2;
   const file = Buffer.alloc(44 + dataBytes);
   file.write("RIFF", 0, "latin1");

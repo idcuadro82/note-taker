@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 export const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -13,3 +14,12 @@ export const segmentationModelPath = path.join(modelsDir, "pyannote-segmentation
 export const embeddingModelPath = path.join(modelsDir, "3dspeaker-campplus-zh-en.onnx");
 
 export const recorderPath = path.join(repoRoot, "recorder", ".build", "release", "audiocap");
+
+/** Throws, saying how to fix it, if any of these models has not been downloaded. */
+export function requireModels(...models: string[]): void {
+  for (const model of models) {
+    if (!existsSync(model)) {
+      throw new Error(`Model not found: ${model}\nRun ./scripts/setup.sh to download it.`);
+    }
+  }
+}

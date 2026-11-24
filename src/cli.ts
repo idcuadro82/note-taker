@@ -1,15 +1,20 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { config, configFile } from "./config.ts";
+import { configFile, loadConfig } from "./config.ts";
 import { CAPTIONS_FILE, runCaptions } from "./live.ts";
 import type { CaptionEvent } from "./live.ts";
-import { currentRecording, meetingsDir, startRecording, stopRecording } from "./session.ts";
-import { renderNotes, summarize } from "./summarize.ts";
-import { transcribeMeeting } from "./transcribe.ts";
-import { formatTime, renderTranscript } from "./transcript.ts";
-import type { Transcript } from "./transcript.ts";
+import { processMeeting, readTranscript, writeNotes, writeTranscript } from "./meeting.ts";
+import type { ProcessOptions } from "./meeting.ts";
+import { sleep } from "./process.ts";
+import { currentRecording, startRecording, stopRecording } from "./session.ts";
+import { formatTime } from "./transcript.ts";
+
+// The only place the settings are read: everything else is handed what it needs.
+const config = loadConfig();
+/** Where meetings are stored: one folder per meeting. */
+const meetingsDir = config.meetingsDir;
 
 const USAGE = `Usage:
   notes start [title]              Start recording a meeting
@@ -35,13 +40,6 @@ Defaults can be changed in ${configFile}`;
 
 const log = (message: string) => console.error(message);
 
-interface Options {
-  language: string;
-  model: string;
-  "no-speakers": boolean;
-  "transcript-only": boolean;
-}
-
 export async function main(argv: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
     args: argv,
@@ -58,6 +56,13 @@ export async function main(argv: string[]): Promise<void> {
     },
   });
   const [command, ...rest] = positionals;
+  const options: ProcessOptions = {
+    language: values.language,
+    model: values.model,
+    separateSpeakers: config.separateSpeakers === "on" && !values["no-speakers"],
+    notes: config.notes === "on" && !values["transcript-only"],
+    log,
+  };
 
   if (values.help || command === undefined) {
     console.log(USAGE);
@@ -76,7 +81,7 @@ export async function main(argv: string[]): Promise<void> {
       return runCaptions(path.resolve(rest[0]), Number(rest[1]), values.language);
     case "stop":
       if (rest.length > 0) break;
-      return stop(values, values["no-notes"]);
+      return stop(options, values["no-notes"]);
     case "status":
       if (rest.length > 0) break;
       return status(values.json);
@@ -85,9 +90,9 @@ export async function main(argv: string[]): Promise<void> {
     case "process": {
       if (rest.length !== 1) break;
       const meetingDir = path.resolve(rest[0]);
-      if (command === "transcribe") await transcribe(meetingDir, values);
-      else if (command === "summarize") await writeNotes(meetingDir, await readTranscript(meetingDir), values.model);
-      else await processMeeting(meetingDir, values);
+      if (command === "transcribe") await writeTranscript(meetingDir, options);
+      else if (command === "summarize") await writeNotes(meetingDir, await readTranscript(meetingDir), options);
+      else await processMeeting(meetingDir, options);
       return;
     }
   }
@@ -95,7 +100,7 @@ export async function main(argv: string[]): Promise<void> {
 }
 
 async function start(title: string, live: boolean): Promise<void> {
-  const recording = await startRecording(title, live);
+  const recording = await startRecording(meetingsDir, title, live);
   log(`Recording to ${recording.dir}`);
   if (live) log('Live captions are on: run "notes captions" to read them here.');
   log('Run "notes stop" when the meeting ends.');
@@ -103,7 +108,7 @@ async function start(title: string, live: boolean): Promise<void> {
 
 /** Prints each caption once it is complete, until the recording ends. */
 async function followCaptions(): Promise<void> {
-  const recording = await currentRecording();
+  const recording = await currentRecording(meetingsDir);
   if (!recording || recording.interrupted) throw new Error("Not recording.");
   if (!recording.captionsPid) {
     throw new Error('This recording has no live captions. Start it with "notes start --live".');
@@ -117,14 +122,14 @@ async function followCaptions(): Promise<void> {
       if (event.final && event.text) console.log(`[${formatTime(event.start)}] ${event.label}: ${event.text}`);
     }
     printed = lines.length;
-    const current = await currentRecording();
+    const current = await currentRecording(meetingsDir);
     if (!current || current.interrupted || current.dir !== recording.dir) return;
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await sleep(500);
   }
 }
 
-async function stop(options: Options, skipNotes: boolean): Promise<void> {
-  const recording = await stopRecording();
+async function stop(options: ProcessOptions, skipNotes: boolean): Promise<void> {
+  const recording = await stopRecording(meetingsDir);
   if (recording.interrupted) {
     log("The recorder was no longer running; using the audio it saved before stopping.");
   }
@@ -137,7 +142,7 @@ async function stop(options: Options, skipNotes: boolean): Promise<void> {
 }
 
 async function status(json: boolean): Promise<void> {
-  const recording = await currentRecording();
+  const recording = await currentRecording(meetingsDir);
   if (json) {
     // Read by the menu bar app.
     const state = !recording ? "idle" : recording.interrupted ? "interrupted" : "recording";
@@ -163,42 +168,4 @@ async function status(json: boolean): Promise<void> {
   }
   const elapsed = (Date.now() - new Date(recording.startedAt).getTime()) / 1000;
   console.log(`Recording for ${formatTime(elapsed)} to ${recording.dir}`);
-}
-
-async function processMeeting(meetingDir: string, options: Options): Promise<void> {
-  const transcript = await transcribe(meetingDir, options);
-  if (options["transcript-only"] || config.notes === "off") {
-    // The notes need far more memory and time than the transcript.
-    log(`Notes skipped. Write them later with: notes summarize "${meetingDir}"`);
-    return;
-  }
-  await writeNotes(meetingDir, transcript, options.model);
-}
-
-async function transcribe(meetingDir: string, options: Options): Promise<Transcript> {
-  const separateSpeakers = config.separateSpeakers === "on" && !options["no-speakers"];
-  const transcript = await transcribeMeeting(meetingDir, options.language, log, separateSpeakers);
-  await writeFile(path.join(meetingDir, "transcript.json"), `${JSON.stringify(transcript, null, 2)}\n`);
-  await writeFile(path.join(meetingDir, "transcript.md"), renderTranscript(transcript));
-  log(`Wrote transcript.json and transcript.md (${transcript.turns.length} turns)`);
-  return transcript;
-}
-
-async function readTranscript(meetingDir: string): Promise<Transcript> {
-  const file = path.join(meetingDir, "transcript.json");
-  if (!existsSync(file)) {
-    throw new Error(`Missing transcript.json in ${meetingDir}. Run "notes transcribe" first.`);
-  }
-  return JSON.parse(await readFile(file, "utf8")) as Transcript;
-}
-
-async function writeNotes(meetingDir: string, transcript: Transcript, model: string): Promise<void> {
-  if (transcript.turns.length === 0) {
-    log("No speech found in the recording: nothing to summarize.");
-    return;
-  }
-  const notes = await summarize(transcript, { model, log });
-  const file = path.join(meetingDir, "notes.md");
-  await writeFile(file, renderNotes(notes, transcript));
-  log(`Wrote ${file}`);
 }

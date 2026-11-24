@@ -1,4 +1,3 @@
-import { config } from "./config.ts";
 import { labelsFor } from "./labels.ts";
 import { generateJson, withOllama } from "./ollama.ts";
 import { renderTurns, speakerName } from "./transcript.ts";
@@ -35,7 +34,8 @@ export interface Notes {
 }
 
 export interface SummarizeOptions {
-  model?: string;
+  /** Ollama model that writes the notes. */
+  model: string;
   /** Longer transcripts are summarized in parts and then merged. */
   maxChunkChars?: number;
   log?: (message: string) => void;
@@ -83,8 +83,8 @@ const NOTES_SCHEMA = {
 };
 
 /** Writes meeting notes from a transcript using a local model. */
-export async function summarize(transcript: Transcript, options: SummarizeOptions = {}): Promise<Notes> {
-  const model = options.model ?? config.model;
+export async function summarize(transcript: Transcript, options: SummarizeOptions): Promise<Notes> {
+  const { model } = options;
   const log = options.log ?? (() => {});
   const chunks = chunkTurns(transcript.turns, options.maxChunkChars ?? DEFAULT_MAX_CHUNK_CHARS);
   if (chunks.length === 0) {

@@ -3,6 +3,9 @@ import type { Labels } from "./labels.ts";
 
 export type Speaker = "me" | "others";
 
+/** Which recorded file belongs to which speaker. */
+export const TRACK_FILES: Record<Speaker, string> = { others: "system.wav", me: "mic.wav" };
+
 /** A stretch of speech, in seconds from the start of the recording. */
 export interface Segment {
   start: number;

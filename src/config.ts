@@ -77,5 +77,3 @@ function parseConfig(text: string, file: string): Partial<Config> {
 function expandHome(dir: string): string {
   return path.resolve(dir === "~" || dir.startsWith("~/") ? path.join(os.homedir(), dir.slice(1)) : dir);
 }
-
-export const config = loadConfig();

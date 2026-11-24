@@ -151,7 +151,7 @@ and dates against the transcript before relying on them.
 
 If the recorder dies mid-meeting, `notes stop` recovers the audio saved until then.
 
-Run the tests with `npm test`.
+Run the tests with `npm test` and check the types with `npm run typecheck`.
 
 ## Where things live
 
