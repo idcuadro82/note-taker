@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard result.succeeded,
                   let status = try? JSONDecoder().decode(CLIStatus.self, from: Data(result.output.utf8))
             else {
-                self.startupError = result.errorOutput.isEmpty ? "Could not read the status." : result.errorOutput
+                self.startupError = result.failure.isEmpty ? "Could not read the status." : result.failure
                 self.render()
                 return
             }
@@ -106,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.busy = false
             self.progress = ""
-            if !result.succeeded { self.showError("Could not start recording", result.errorOutput) }
+            if !result.succeeded { self.showError("Could not start recording", result.failure) }
             self.refresh()
             self.render()
         }
@@ -149,13 +149,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.busy = false
                 self.progress = ""
                 self.state = .idle
-                // What "Open Last Notes" opens: the transcript when there are no notes.
-                let written = directory + (mode == .notes ? "/notes.md" : "/transcript.md")
+                // What "Open Last Notes" opens: the transcript when there are no
+                // notes, also when writing them is the step that failed.
+                let written = [directory + "/notes.md", directory + "/transcript.md"]
+                    .dropFirst(mode == .notes && result.succeeded ? 0 : 1)
+                    .first(where: FileManager.default.fileExists(atPath:))
+                if mode != .audioOnly, let written { self.lastNotes = written }
                 if !result.succeeded {
                     let what = mode == .notes ? "write the notes" : "process the recording"
-                    self.showError("Could not " + what, result.errorOutput)
-                } else if mode != .audioOnly, FileManager.default.fileExists(atPath: written) {
-                    self.lastNotes = written
+                    self.showError("Could not " + what, result.failure)
                 }
                 self.refresh()
                 self.render()

@@ -6,6 +6,14 @@ struct CLIResult {
     let errorOutput: String
 
     var succeeded: Bool { exitCode == 0 }
+
+    /// Why the command failed. It logs its progress to the same stream before
+    /// failing, so only what follows its "Error: " line is the failure.
+    var failure: String {
+        let lines = errorOutput.split(separator: "\n", omittingEmptySubsequences: false)
+        guard let first = lines.firstIndex(where: { $0.hasPrefix("Error: ") }) else { return errorOutput }
+        return String(lines[first...].joined(separator: "\n").dropFirst("Error: ".count))
+    }
 }
 
 /// Runs the `notes` command line tool of this repository.

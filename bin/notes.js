@@ -5,6 +5,7 @@ try {
   const { main } = await import("../src/cli.ts");
   await main(process.argv.slice(2));
 } catch (error) {
-  console.error(error instanceof Error ? error.message : error);
+  // The prefix tells the failure apart from the progress logged before it.
+  console.error(`Error: ${error instanceof Error ? error.message : error}`);
   process.exit(1);
 }

@@ -18,8 +18,21 @@ if ! command -v brew >/dev/null; then
   exit 1
 fi
 
+if ! command -v node >/dev/null; then
+  echo "Node was not found. Install Node 24 or later and run this again." >&2
+  exit 1
+fi
+
+# The notes are written with Ollama: with "notes": "off" in config.local.json
+# neither Ollama nor its model, the largest download, is installed.
+NOTES="$(cd "$REPO_DIR" && node --input-type=module \
+  -e 'const { loadConfig } = await import("./src/config.ts"); console.log(loadConfig().notes);')"
+
 echo "==> Homebrew dependencies"
 brew bundle --file="$REPO_DIR/Brewfile"
+if [[ "$NOTES" == "on" ]]; then
+  brew list ollama >/dev/null 2>&1 || brew install ollama
+fi
 
 # download <file-name> <url>: fetches into models/ unless it is already there.
 download() {
@@ -60,21 +73,21 @@ else
 fi
 
 echo "==> Node dependencies"
-if ! command -v node >/dev/null; then
-  echo "Node was not found. Install Node 24 or later and run this again." >&2
-  exit 1
-fi
 (cd "$REPO_DIR" && npm ci --no-audit --no-fund)
 
-echo "==> Ollama model ($OLLAMA_MODEL)"
-if ! curl -s --max-time 2 http://localhost:11434/api/version >/dev/null; then
-  brew services start ollama
-  for _ in {1..30}; do
-    curl -s --max-time 2 http://localhost:11434/api/version >/dev/null && break
-    sleep 1
-  done
+if [[ "$NOTES" == "on" ]]; then
+  echo "==> Ollama model ($OLLAMA_MODEL)"
+  if ! curl -s --max-time 2 http://localhost:11434/api/version >/dev/null; then
+    brew services start ollama
+    for _ in {1..30}; do
+      curl -s --max-time 2 http://localhost:11434/api/version >/dev/null && break
+      sleep 1
+    done
+  fi
+  ollama pull "$OLLAMA_MODEL"
+else
+  echo "==> Ollama skipped: the notes are off in config.local.json"
 fi
-ollama pull "$OLLAMA_MODEL"
 
 if [[ -f "$REPO_DIR/recorder/Package.swift" ]]; then
   echo "==> Building the recorder"
@@ -90,3 +103,6 @@ open "$REPO_DIR/build/NoteTaker.app"
 echo
 echo "Done. Whisper models are in: $MODELS_DIR"
 echo "NoteTaker is now in the menu bar (microphone icon)."
+if [[ "$NOTES" != "on" ]]; then
+  echo "Meetings stop at the transcript. For the notes, set \"notes\": \"on\" in config.local.json and run this again."
+fi

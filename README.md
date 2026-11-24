@@ -30,6 +30,16 @@ Models can be changed with environment variables:
 WHISPER_MODEL=medium OLLAMA_MODEL=qwen2.5:14b ./scripts/setup.sh
 ```
 
+To only transcribe, without Ollama and its model (about 8 GB less to download),
+turn the notes off before running the script:
+
+```bash
+echo '{ "notes": "off" }' > config.local.json
+./scripts/setup.sh
+```
+
+Set `"notes"` back to `"on"` and run the script again to add them later.
+
 ## Usage
 
 ```bash
@@ -142,6 +152,9 @@ Writing the notes is the heavy step: the model needs about 10 GB of memory, the
 transcript about 2 GB. With `"notes": "off"`, or **Stop and Transcribe Only** in
 the menu, you get `transcript.md` (who said what) and Ollama is never started.
 Write the notes later with `notes summarize <folder>`.
+
+With `"notes": "off"` the menu does not offer to write the notes, and
+`scripts/setup.sh` does not install Ollama.
 
 See [docs/memory.md](docs/memory.md) for the memory each mode needs.
 

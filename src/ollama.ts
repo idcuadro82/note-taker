@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { waitUntilReady } from "./process.ts";
+import { CommandNotFoundError, waitUntilReady } from "./process.ts";
 
 const BASE_URL = "http://127.0.0.1:11434";
 const STARTUP_TIMEOUT_MS = 30_000;
@@ -34,6 +34,12 @@ export async function withOllama<T>(task: () => Promise<T>): Promise<T> {
   try {
     await waitUntilReady(server, "ollama", isRunning, STARTUP_TIMEOUT_MS);
     return await task();
+  } catch (error) {
+    if (!(error instanceof CommandNotFoundError)) throw error;
+    throw new Error(
+      'Ollama is not installed, and the notes are written with it.\n' +
+        'Run ./scripts/setup.sh to install it, or set "notes": "off" in config.local.json to stop at the transcript.',
+    );
   } finally {
     stop();
     process.off("exit", stop);

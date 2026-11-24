@@ -66,9 +66,12 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** The command is not installed. */
+export class CommandNotFoundError extends Error {}
+
 /** Says how to fix it when the command is not installed. */
 function spawnError(command: string, error: NodeJS.ErrnoException): Error {
   return error.code === "ENOENT"
-    ? new Error(`${command} not found. Run ./scripts/setup.sh to install it.`)
+    ? new CommandNotFoundError(`${command} not found. Run ./scripts/setup.sh to install it.`)
     : error;
 }

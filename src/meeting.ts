@@ -35,7 +35,16 @@ export async function processMeeting(meetingDir: string, options: ProcessOptions
     options.log(`Notes skipped. Write them later with: notes summarize "${meetingDir}"`);
     return;
   }
-  await writeNotes(meetingDir, transcript, options);
+  try {
+    await writeNotes(meetingDir, transcript, options);
+  } catch (error) {
+    // The transcript is not lost: say so, and how to get the notes afterwards.
+    throw new Error(
+      `The transcript was written, but the notes were not.\n${(error as Error).message}\n` +
+        `Write the notes later with: notes summarize "${meetingDir}"`,
+      { cause: error },
+    );
+  }
 }
 
 /** system.wav + mic.wav -> transcript.json, transcript.md */
