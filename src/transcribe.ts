@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { assignPeople, findVoices } from "./diarize.ts";
 import { vadModelPath } from "./paths.ts";
 import { dropEcho, mergeTracks } from "./transcript.ts";
 import type { Segment, Speaker, Transcript } from "./transcript.ts";
@@ -31,6 +32,7 @@ export async function transcribeMeeting(
   meetingDir: string,
   language: string,
   log: (message: string) => void = () => {},
+  separateSpeakers = false,
 ): Promise<Transcript> {
   for (const file of Object.values(TRACK_FILES)) {
     if (!existsSync(path.join(meetingDir, file))) {
@@ -46,7 +48,9 @@ export async function transcribeMeeting(
     log("Finding speech...");
     const clips: Clip[] = [];
     for (const speaker of Object.keys(TRACK_FILES) as Speaker[]) {
-      clips.push(...(await cutClips(path.join(meetingDir, TRACK_FILES[speaker]), speaker, workDir)));
+      // Only the others are told apart: the microphone is always the user.
+      const separate = separateSpeakers && speaker === "others";
+      clips.push(...(await cutClips(path.join(meetingDir, TRACK_FILES[speaker]), speaker, workDir, separate, log)));
     }
     if (clips.length === 0) {
       return { language: language === "auto" ? "unknown" : language, turns: [] };
@@ -74,6 +78,7 @@ export async function transcribeMeeting(
           start: round(clip.start + segment.start),
           end: round(Math.min(clip.start + segment.end, clip.end)),
           text: segment.text,
+          ...(clip.person !== undefined && { person: clip.person }),
         });
       }
     });
@@ -91,9 +96,19 @@ export async function transcribeMeeting(
   }
 }
 
-async function cutClips(wavPath: string, speaker: Speaker, workDir: string): Promise<Clip[]> {
+async function cutClips(
+  wavPath: string,
+  speaker: Speaker,
+  workDir: string,
+  separateSpeakers: boolean,
+  log: (message: string) => void,
+): Promise<Clip[]> {
   const samples = await readWav(wavPath);
-  const ranges = planClips(await detectSpeech(wavPath), samples.length / SAMPLE_RATE);
+  let speech = await detectSpeech(wavPath);
+  if (separateSpeakers && speech.length > 0) {
+    speech = await tellPeopleApart(speech, samples, log);
+  }
+  const ranges = planClips(speech, samples.length / SAMPLE_RATE);
 
   const clips: Clip[] = [];
   for (const [index, range] of ranges.entries()) {
@@ -108,6 +123,29 @@ async function cutClips(wavPath: string, speaker: Speaker, workDir: string): Pro
     clips.push({ ...range, speaker, file });
   }
   return clips;
+}
+
+/**
+ * Marks who is talking in each stretch of speech. Falls back to the speech
+ * unmarked if the voices cannot be told apart: the notes matter more.
+ */
+async function tellPeopleApart(
+  speech: Range[],
+  samples: Int16Array,
+  log: (message: string) => void,
+): Promise<Range[]> {
+  log("Telling the speakers apart...");
+  try {
+    const people = assignPeople(speech, await findVoices(samples));
+    const count = new Set(people.map((piece) => piece.person)).size;
+    // With a single voice there is nobody to tell apart.
+    if (count < 2) return speech;
+    log(`Found ${count} speakers.`);
+    return people;
+  } catch (error) {
+    log(`Could not tell the speakers apart: ${(error as Error).message.split("\n")[0]}`);
+    return speech;
+  }
 }
 
 function round(seconds: number): number {

@@ -1,4 +1,5 @@
 import { labelsFor } from "./labels.ts";
+import type { Labels } from "./labels.ts";
 
 export type Speaker = "me" | "others";
 
@@ -7,6 +8,8 @@ export interface Segment {
   start: number;
   end: number;
   text: string;
+  /** Which of the others is talking (1, 2...), when they have been told apart. */
+  person?: number;
 }
 
 export interface Turn extends Segment {
@@ -33,7 +36,12 @@ export function mergeTracks(tracks: Record<Speaker, Segment[]>): Turn[] {
   const turns: Turn[] = [];
   for (const segment of all) {
     const last = turns.at(-1);
-    if (last && last.speaker === segment.speaker && segment.start - last.end <= MAX_PAUSE_WITHIN_TURN) {
+    if (
+      last &&
+      last.speaker === segment.speaker &&
+      last.person === segment.person &&
+      segment.start - last.end <= MAX_PAUSE_WITHIN_TURN
+    ) {
       last.text = `${last.text} ${segment.text}`;
       last.end = Math.max(last.end, segment.end);
     } else {
@@ -107,8 +115,14 @@ function words(text: string): string[] {
 export function renderTurns(transcript: Transcript): string {
   const labels = labelsFor(transcript.language);
   return transcript.turns
-    .map((turn) => `**[${formatTime(turn.start)}] ${labels[turn.speaker]}:** ${turn.text}`)
+    .map((turn) => `**[${formatTime(turn.start)}] ${speakerName(turn, labels)}:** ${turn.text}`)
     .join("\n\n");
+}
+
+/** "Me", "Others", or "Speaker 2" when the others have been told apart. */
+export function speakerName(turn: Turn, labels: Labels): string {
+  if (turn.speaker === "me") return labels.me;
+  return turn.person === undefined ? labels.others : `${labels.participant} ${turn.person}`;
 }
 
 export function renderTranscript(transcript: Transcript): string {

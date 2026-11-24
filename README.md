@@ -20,8 +20,8 @@ cd note-taker
 ./scripts/setup.sh
 ```
 
-The script installs `whisper.cpp` and `ollama`, downloads the models, builds the recorder
-and the menu bar app, and opens the app.
+The script installs `whisper.cpp`, `ollama` and the Node dependencies, downloads the
+models, builds the recorder and the menu bar app, and opens the app.
 Models can be changed with environment variables:
 
 ```bash
@@ -55,6 +55,20 @@ that echo is removed from the transcript, some of it can slip through.
 The first run needs two permissions for your terminal app, under
 System Settings > Privacy & Security: **Microphone** and
 **Screen & System Audio Recording**. Restart the terminal after granting them.
+
+## Telling the participants apart
+
+The other participants are told apart by their voices and appear in the
+transcript as `Speaker 1`, `Speaker 2`... When someone says their name ("I am
+Ana"), the notes use it for their tasks, and a **Participants** section lists who
+is who. Two names next to one speaker mean two similar voices were confused.
+
+It only applies to the notes written when the recording stops, not to the live
+captions, and it never changes your own microphone: that is always you.
+
+Voices can be confused, mostly similar ones or people who say very little. Turn it
+off with `"separateSpeakers": "off"` in `config.local.json`, or with
+`--no-speakers` for one run.
 
 ## Live captions
 
@@ -117,6 +131,7 @@ To change the defaults on this Mac, copy `config.example.json` to `config.local.
 | `meetingsDir` | `~/Meetings` | | Folder where meetings are stored |
 | `language` | `auto` | `--language es` | Spoken language; `auto` detects it |
 | `model` | `gemma3:12b` | `--model qwen2.5:14b` | Ollama model that writes the notes |
+| `separateSpeakers` | `on` | `--no-speakers` | Tell the other participants apart by their voices |
 
 Ollama does not need to be running: it is started for the summary and stopped
 afterwards. The notes are written by a small local model, so check names, owners

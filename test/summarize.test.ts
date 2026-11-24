@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chunkTurns, contextSizeFor, renderNotes } from "../src/summarize.ts";
+import { chunkTurns, contextSizeFor, renderNotes, useNames } from "../src/summarize.ts";
 import type { Notes } from "../src/summarize.ts";
 import type { Transcript, Turn } from "../src/transcript.ts";
 
@@ -54,7 +54,56 @@ const notes: Notes = {
     { owner: "", task: "Avisar a soporte", due: "" },
   ],
   openQuestions: [],
+  participants: [],
 };
+
+test("numbered speakers are replaced by their names where known", () => {
+  const renamed = useNames({
+    ...notes,
+    summary: "Participante 1 pidió un informe a Participante 2 y a Participante 12.",
+    actionItems: [
+      { owner: "Participante 2", task: "Enviar el informe a Participante 1", due: "" },
+      { owner: "Participante 3", task: "Revisar", due: "" },
+    ],
+    participants: [
+      { speaker: "Participante 1", names: ["Laura"] },
+      { speaker: "Participante 2", names: ["Andrés"] },
+      { speaker: "Participante 3", names: [] },
+    ],
+  });
+  assert.equal(renamed.summary, "Laura pidió un informe a Andrés y a Participante 12.");
+  assert.deepEqual(renamed.actionItems, [
+    { owner: "Andrés", task: "Enviar el informe a Laura", due: "" },
+    { owner: "Participante 3", task: "Revisar", due: "" },
+  ]);
+});
+
+test("a speaker with two names keeps its number: two voices were confused", () => {
+  const renamed = useNames({
+    ...notes,
+    actionItems: [{ owner: "Participante 2", task: "Consultar con dirección", due: "" }],
+    participants: [{ speaker: "Participante 2", names: ["Andrés", "Carlos"] }],
+  });
+  assert.equal(renamed.actionItems[0].owner, "Participante 2");
+});
+
+test("the participants are listed in the notes", () => {
+  const markdown = renderNotes(
+    {
+      ...notes,
+      participants: [
+        { speaker: "Participante 1", names: ["Laura"] },
+        { speaker: "Participante 2", names: ["Andrés", "Carlos"] },
+        { speaker: "Participante 3", names: [] },
+      ],
+    },
+    transcript,
+  );
+  assert.match(
+    markdown,
+    /## Participantes\n\n- Participante 1: Laura\n- Participante 2: Andrés \/ Carlos\n- Participante 3: \?\n/,
+  );
+});
 
 test("renders notes in the meeting language and skips empty sections", () => {
   const markdown = renderNotes(notes, transcript);

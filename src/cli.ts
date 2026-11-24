@@ -26,6 +26,7 @@ Options:
   --language <code>   Spoken language (es, en..., or auto). Default: ${config.language}
   --model <name>      Ollama model for the notes. Default: ${config.model}
   --no-notes          With "stop": keep the recording but do not process it.
+  --no-speakers       Group the other participants instead of telling them apart.
   --json              With "status": print the state as JSON.
 
 Meetings are stored in ${meetingsDir}
@@ -36,6 +37,7 @@ const log = (message: string) => console.error(message);
 interface Options {
   language: string;
   model: string;
+  "no-speakers": boolean;
 }
 
 export async function main(argv: string[]): Promise<void> {
@@ -46,6 +48,7 @@ export async function main(argv: string[]): Promise<void> {
       language: { type: "string", default: config.language },
       model: { type: "string", default: config.model },
       "no-notes": { type: "boolean", default: false },
+      "no-speakers": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       live: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -79,7 +82,7 @@ export async function main(argv: string[]): Promise<void> {
     case "process": {
       if (rest.length !== 1) break;
       const meetingDir = path.resolve(rest[0]);
-      if (command === "transcribe") await transcribe(meetingDir, values.language);
+      if (command === "transcribe") await transcribe(meetingDir, values);
       else if (command === "summarize") await writeNotes(meetingDir, await readTranscript(meetingDir), values.model);
       else await processMeeting(meetingDir, values);
       return;
@@ -159,11 +162,12 @@ async function status(json: boolean): Promise<void> {
 }
 
 async function processMeeting(meetingDir: string, options: Options): Promise<void> {
-  await writeNotes(meetingDir, await transcribe(meetingDir, options.language), options.model);
+  await writeNotes(meetingDir, await transcribe(meetingDir, options), options.model);
 }
 
-async function transcribe(meetingDir: string, language: string): Promise<Transcript> {
-  const transcript = await transcribeMeeting(meetingDir, language, log);
+async function transcribe(meetingDir: string, options: Options): Promise<Transcript> {
+  const separateSpeakers = config.separateSpeakers === "on" && !options["no-speakers"];
+  const transcript = await transcribeMeeting(meetingDir, options.language, log, separateSpeakers);
   await writeFile(path.join(meetingDir, "transcript.json"), `${JSON.stringify(transcript, null, 2)}\n`);
   await writeFile(path.join(meetingDir, "transcript.md"), renderTranscript(transcript));
   log(`Wrote transcript.json and transcript.md (${transcript.turns.length} turns)`);

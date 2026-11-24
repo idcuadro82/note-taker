@@ -42,6 +42,30 @@ echo "==> Voice activity detection model"
 download "ggml-silero-v5.1.2.bin" \
   "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin"
 
+echo "==> Speaker separation models"
+download "3dspeaker-campplus-zh-en.onnx" \
+  "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+if [[ ! -f "$MODELS_DIR/pyannote-segmentation-3.0.onnx" ]]; then
+  # Published as an archive: only the model file inside it is needed.
+  SEGMENTATION_TMP="$(mktemp -d)"
+  curl -L --fail --progress-bar -o "$SEGMENTATION_TMP/model.tar.bz2" \
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+  tar -xjf "$SEGMENTATION_TMP/model.tar.bz2" -C "$SEGMENTATION_TMP" \
+    sherpa-onnx-pyannote-segmentation-3-0/model.onnx
+  mv "$SEGMENTATION_TMP/sherpa-onnx-pyannote-segmentation-3-0/model.onnx" \
+    "$MODELS_DIR/pyannote-segmentation-3.0.onnx"
+  rm -rf "$SEGMENTATION_TMP"
+else
+  echo "Already downloaded: $MODELS_DIR/pyannote-segmentation-3.0.onnx"
+fi
+
+echo "==> Node dependencies"
+if ! command -v node >/dev/null; then
+  echo "Node was not found. Install Node 24 or later and run this again." >&2
+  exit 1
+fi
+(cd "$REPO_DIR" && npm ci --no-audit --no-fund)
+
 echo "==> Ollama model ($OLLAMA_MODEL)"
 if ! curl -s --max-time 2 http://localhost:11434/api/version >/dev/null; then
   brew services start ollama

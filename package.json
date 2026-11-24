@@ -12,5 +12,8 @@
   },
   "scripts": {
     "test": "node --test"
+  },
+  "dependencies": {
+    "sherpa-onnx-node": "2.0.3"
   }
 }

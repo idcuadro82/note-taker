@@ -10,12 +10,19 @@ export interface Config {
   language: string;
   /** Ollama model that writes the notes. */
   model: string;
+  /** "on" to tell the other participants apart by their voices, "off" to group them. */
+  separateSpeakers: string;
 }
 
 const DEFAULTS: Config = {
   meetingsDir: "~/Meetings",
   language: "auto",
   model: "gemma3:12b",
+  separateSpeakers: "on",
+};
+
+const ALLOWED_VALUES: Partial<Record<keyof Config, string[]>> = {
+  separateSpeakers: ["on", "off"],
 };
 
 /** Per-machine settings; not committed. See config.example.json. */
@@ -54,6 +61,10 @@ function parseConfig(text: string, file: string): Partial<Config> {
     }
     if (typeof value !== "string" || value === "") {
       throw new Error(`Setting "${key}" in ${file} must be a non-empty string.`);
+    }
+    const allowed = ALLOWED_VALUES[key as keyof Config];
+    if (allowed && !allowed.includes(value)) {
+      throw new Error(`Setting "${key}" in ${file} must be one of: ${allowed.join(", ")}.`);
     }
   }
   return parsed as Partial<Config>;

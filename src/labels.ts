@@ -3,6 +3,9 @@ export interface Labels {
   languageName: string;
   me: string;
   others: string;
+  /** One of the others when they are told apart: followed by a number. */
+  participant: string;
+  participants: string;
   transcript: string;
   summary: string;
   keyPoints: string;
@@ -17,6 +20,8 @@ const LABELS: Record<string, Labels> = {
     languageName: "English",
     me: "Me",
     others: "Others",
+    participant: "Speaker",
+    participants: "Participants",
     transcript: "Transcript",
     summary: "Summary",
     keyPoints: "Key points",
@@ -29,6 +34,8 @@ const LABELS: Record<string, Labels> = {
     languageName: "Spanish",
     me: "Yo",
     others: "Otros",
+    participant: "Participante",
+    participants: "Participantes",
     transcript: "Transcripción",
     summary: "Resumen",
     keyPoints: "Puntos clave",

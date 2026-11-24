@@ -17,6 +17,7 @@ test("uses the defaults when there is no config file", () => {
     meetingsDir: path.join(os.homedir(), "Meetings"),
     language: "auto",
     model: "gemma3:12b",
+    separateSpeakers: "on",
   });
 });
 
@@ -36,4 +37,5 @@ test("rejects invalid JSON and wrong value types", () => {
   assert.throws(() => loadConfig(fileWith("{ not json"), {}), /Invalid JSON/);
   assert.throws(() => loadConfig(fileWith('{"language": 5}'), {}), /must be a non-empty string/);
   assert.throws(() => loadConfig(fileWith("[]"), {}), /must contain a JSON object/);
+  assert.throws(() => loadConfig(fileWith('{"separateSpeakers": "yes"}'), {}), /must be one of: on, off/);
 });
