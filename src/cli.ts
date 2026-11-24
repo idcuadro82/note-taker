@@ -22,6 +22,7 @@ Options:
   --language <code>   Spoken language (es, en..., or auto). Default: ${config.language}
   --model <name>      Ollama model for the notes. Default: ${config.model}
   --no-notes          With "stop": keep the recording but do not process it.
+  --json              With "status": print the state as JSON.
 
 Meetings are stored in ${meetingsDir}
 Defaults can be changed in ${configFile}`;
@@ -41,6 +42,7 @@ export async function main(argv: string[]): Promise<void> {
       language: { type: "string", default: config.language },
       model: { type: "string", default: config.model },
       "no-notes": { type: "boolean", default: false },
+      json: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
   });
@@ -59,7 +61,7 @@ export async function main(argv: string[]): Promise<void> {
       return stop(values, values["no-notes"]);
     case "status":
       if (rest.length > 0) break;
-      return status();
+      return status(values.json);
     case "transcribe":
     case "summarize":
     case "process": {
@@ -93,8 +95,14 @@ async function stop(options: Options, skipNotes: boolean): Promise<void> {
   await processMeeting(recording.dir, options);
 }
 
-async function status(): Promise<void> {
+async function status(json: boolean): Promise<void> {
   const recording = await currentRecording();
+  if (json) {
+    // Read by the menu bar app.
+    const state = !recording ? "idle" : recording.interrupted ? "interrupted" : "recording";
+    console.log(JSON.stringify({ state, meetingsDir, dir: recording?.dir, startedAt: recording?.startedAt }));
+    return;
+  }
   if (!recording) {
     console.log("Not recording.");
     return;

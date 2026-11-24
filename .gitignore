@@ -19,3 +19,6 @@ dist/
 config.local.json
 .env
 .DS_Store
+
+# Menu bar app bundle
+build/

@@ -57,5 +57,12 @@ if [[ -f "$REPO_DIR/recorder/Package.swift" ]]; then
   swift build -c release --package-path "$REPO_DIR/recorder"
 fi
 
+echo "==> Building the menu bar app"
+"$REPO_DIR/scripts/build-menubar.sh"
+# Restart it so the icon in the menu bar is the version just built.
+pkill -f "NoteTaker.app/Contents/MacOS/NoteTaker" 2>/dev/null || true
+open "$REPO_DIR/build/NoteTaker.app"
+
 echo
 echo "Done. Whisper models are in: $MODELS_DIR"
+echo "NoteTaker is now in the menu bar (microphone icon)."

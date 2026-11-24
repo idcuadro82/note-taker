@@ -20,7 +20,8 @@ cd note-taker
 ./scripts/setup.sh
 ```
 
-The script installs `whisper.cpp` and `ollama`, downloads the models and builds the recorder.
+The script installs `whisper.cpp` and `ollama`, downloads the models, builds the recorder
+and the menu bar app, and opens the app.
 Models can be changed with environment variables:
 
 ```bash
@@ -55,7 +56,29 @@ The first run needs two permissions for your terminal app, under
 System Settings > Privacy & Security: **Microphone** and
 **Screen & System Audio Recording**. Restart the terminal after granting them.
 
-Other commands:
+## Menu bar app
+
+```bash
+open build/NoteTaker.app
+```
+
+Adds a microphone icon to the menu bar to start and stop recordings without a
+terminal. While recording it shows a red dot and the elapsed time; while the notes
+are being written, the menu shows the progress. From the menu you can also open the
+last notes, open the meetings folder and make the app start at login.
+
+It runs the same `notes` commands, so the terminal and the icon can be mixed.
+
+The app needs its own **Microphone** and **Screen & System Audio Recording**
+permissions (the ones given to the terminal do not apply to it): macOS asks the
+first time you start a recording from the icon. Quit and reopen the app after
+granting them.
+
+`scripts/setup.sh` builds and opens the app. Rebuild it with `scripts/build-menubar.sh` after
+upgrading Node or moving this folder; macOS may ask for the permissions again.
+
+## Other commands
+
 
 | Command | |
 |---|---|
