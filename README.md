@@ -11,6 +11,8 @@ Nothing leaves your machine.
 - Xcode Command Line Tools (`xcode-select --install`)
 - Node 24 or later
 - About 10 GB of free disk space for the models
+- About 10 GB of free memory to write the notes, 2 GB for the transcript alone:
+  see [the memory each mode needs](docs/memory.md)
 
 ## Setup on a new Mac
 
@@ -140,6 +142,8 @@ Writing the notes is the heavy step: the model needs about 10 GB of memory, the
 transcript about 2 GB. With `"notes": "off"`, or **Stop and Transcribe Only** in
 the menu, you get `transcript.md` (who said what) and Ollama is never started.
 Write the notes later with `notes summarize <folder>`.
+
+See [docs/memory.md](docs/memory.md) for the memory each mode needs.
 
 Ollama does not need to be running: it is started for the summary and stopped
 afterwards. The notes are written by a small local model, so check names, owners
