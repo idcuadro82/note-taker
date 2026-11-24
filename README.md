@@ -36,7 +36,7 @@ bin/notes.js stop                  # when it ends: transcribes and writes the no
 
 Run `npm link` once in this folder to use `notes` instead of `bin/notes.js`.
 
-Each meeting gets its own folder in `~/Meetings` (override with `NOTES_DIR`),
+Each meeting gets its own folder in `~/Meetings`,
 named after the date, time and title, for example `2026-11-23-0930-weekly-sync/`:
 
 | File | Content |
@@ -47,8 +47,9 @@ named after the date, time and title, for example `2026-11-23-0930-weekly-sync/`
 
 The recording runs in the background, so the terminal can be used or closed
 meanwhile. It works with any app (Slack, Teams, Google Meet, Zoom...) because it
-captures the audio of the whole system. Use headphones: with speakers, the
-microphone also picks up the other participants.
+captures the audio of the whole system. Headphones give the cleanest result: with
+speakers the microphone also picks up the other participants, and although
+that echo is removed from the transcript, some of it can slip through.
 
 The first run needs two permissions for your terminal app, under
 System Settings > Privacy & Security: **Microphone** and
@@ -64,10 +65,16 @@ Other commands:
 | `notes transcribe <folder>` | Only writes the transcript |
 | `notes summarize <folder>` | Only rewrites the notes from the transcript |
 
-| Option | Default | |
-|---|---|---|
-| `--language es` | auto-detect | Spoken language |
-| `--model qwen2.5:14b` | `gemma3:12b` | Ollama model that writes the notes |
+## Settings
+
+To change the defaults on this Mac, copy `config.example.json` to `config.local.json`
+(not committed) and edit it:
+
+| Setting | Default | Option for one run | |
+|---|---|---|---|
+| `meetingsDir` | `~/Meetings` | | Folder where meetings are stored |
+| `language` | `auto` | `--language es` | Spoken language; `auto` detects it |
+| `model` | `gemma3:12b` | `--model qwen2.5:14b` | Ollama model that writes the notes |
 
 Ollama does not need to be running: it is started for the summary and stopped
 afterwards. The notes are written by a small local model, so check names, owners

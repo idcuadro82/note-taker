@@ -1,9 +1,8 @@
+import { config } from "./config.ts";
 import { labelsFor } from "./labels.ts";
 import { generateJson, withOllama } from "./ollama.ts";
 import { renderTurns } from "./transcript.ts";
 import type { Transcript, Turn } from "./transcript.ts";
-
-export const DEFAULT_MODEL = process.env.OLLAMA_MODEL ?? "gemma3:12b";
 
 export interface ActionItem {
   /** Empty when the transcript does not say who is responsible. */
@@ -64,7 +63,7 @@ const NOTES_SCHEMA = {
 
 /** Writes meeting notes from a transcript using a local model. */
 export async function summarize(transcript: Transcript, options: SummarizeOptions = {}): Promise<Notes> {
-  const model = options.model ?? DEFAULT_MODEL;
+  const model = options.model ?? config.model;
   const log = options.log ?? (() => {});
   const chunks = chunkTurns(transcript.turns, options.maxChunkChars ?? DEFAULT_MAX_CHUNK_CHARS);
   if (chunks.length === 0) {

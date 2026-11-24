@@ -2,8 +2,9 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { config, configFile } from "./config.ts";
 import { currentRecording, meetingsDir, startRecording, stopRecording } from "./session.ts";
-import { DEFAULT_MODEL, renderNotes, summarize } from "./summarize.ts";
+import { renderNotes, summarize } from "./summarize.ts";
 import { transcribeMeeting } from "./transcribe.ts";
 import { formatTime, renderTranscript } from "./transcript.ts";
 import type { Transcript } from "./transcript.ts";
@@ -18,11 +19,12 @@ const USAGE = `Usage:
   notes summarize <meeting-dir>    transcript.json -> notes.md
 
 Options:
-  --language <code>   Spoken language (es, en...). Default: auto-detect.
-  --model <name>      Ollama model for the notes. Default: ${DEFAULT_MODEL}
+  --language <code>   Spoken language (es, en..., or auto). Default: ${config.language}
+  --model <name>      Ollama model for the notes. Default: ${config.model}
   --no-notes          With "stop": keep the recording but do not process it.
 
-Meetings are stored in ${meetingsDir} (override with NOTES_DIR).`;
+Meetings are stored in ${meetingsDir}
+Defaults can be changed in ${configFile}`;
 
 const log = (message: string) => console.error(message);
 
@@ -36,8 +38,8 @@ export async function main(argv: string[]): Promise<void> {
     args: argv,
     allowPositionals: true,
     options: {
-      language: { type: "string", default: "auto" },
-      model: { type: "string", default: DEFAULT_MODEL },
+      language: { type: "string", default: config.language },
+      model: { type: "string", default: config.model },
       "no-notes": { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },

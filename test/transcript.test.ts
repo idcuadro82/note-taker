@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatTime, mergeTracks, renderTranscript } from "../src/transcript.ts";
+import { dropEcho, formatTime, mergeTracks, renderTranscript } from "../src/transcript.ts";
 
 test("interleaves both tracks by start time", () => {
   const turns = mergeTracks({
@@ -59,4 +59,37 @@ test("formats seconds as hh:mm:ss", () => {
   assert.equal(formatTime(0), "00:00:00");
   assert.equal(formatTime(59.9), "00:00:59");
   assert.equal(formatTime(3661), "01:01:01");
+});
+
+test("drops microphone speech that repeats what the others are saying", () => {
+  const others = [
+    { start: 0, end: 2.5, text: "Hola. Hemos decidido publicar la nueva versión el viernes." },
+    { start: 4, end: 6, text: "Marta revisará las pruebas mañana." },
+  ];
+  const me = [
+    { start: 2, end: 4, text: "decidido publicar la nueva versión del viernes." },
+    { start: 6, end: 6.8, text: "más mañana." },
+  ];
+  assert.deepEqual(dropEcho(me, others, [{ start: 0.3, end: 6.9 }]), []);
+});
+
+test("keeps what the user says, even while the others talk", () => {
+  const others = [{ start: 0, end: 6, text: "Hemos decidido publicar la nueva versión el viernes." }];
+  const me = [
+    { start: 2, end: 5, text: "Perdona que te interrumpa, pero creo que eso no es correcto." },
+    { start: 7, end: 9, text: "Yo prefiero publicar el lunes." },
+  ];
+  assert.deepEqual(dropEcho(me, others, [{ start: 0, end: 6 }]), me);
+});
+
+test("keeps an answer that repeats words of the question", () => {
+  const others = [{ start: 0, end: 3, text: "¿Lo tendrás listo el viernes?" }];
+  const me = [{ start: 3.4, end: 4.2, text: "El viernes." }];
+  assert.deepEqual(dropEcho(me, others, [{ start: 0, end: 3.1 }]), me);
+});
+
+test("the same words far apart in time are not echo", () => {
+  const others = [{ start: 0, end: 3, text: "Publicamos el viernes." }];
+  const me = [{ start: 60, end: 62, text: "Publicamos el viernes." }];
+  assert.deepEqual(dropEcho(me, others, [{ start: 0, end: 3 }]), me);
 });

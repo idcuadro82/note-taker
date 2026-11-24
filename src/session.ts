@@ -1,13 +1,13 @@
 import { spawn } from "node:child_process";
 import { existsSync, openSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { config } from "./config.ts";
 import { recorderPath } from "./paths.ts";
 import { run } from "./process.ts";
 
 /** Where meetings are stored: one folder per meeting. */
-export const meetingsDir = process.env.NOTES_DIR ?? path.join(os.homedir(), "Meetings");
+export const meetingsDir = config.meetingsDir;
 
 /** Remembers the recording in progress between `notes start` and `notes stop`. */
 const stateFile = path.join(meetingsDir, ".recording.json");

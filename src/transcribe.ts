@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { vadModelPath } from "./paths.ts";
-import { mergeTracks } from "./transcript.ts";
+import { dropEcho, mergeTracks } from "./transcript.ts";
 import type { Segment, Speaker, Transcript } from "./transcript.ts";
 import { detectSpeech, planClips } from "./vad.ts";
 import type { Range } from "./vad.ts";
@@ -77,7 +77,15 @@ export async function transcribeMeeting(
         });
       }
     });
-    return { language, turns: mergeTracks(tracks) };
+    const mine = dropEcho(
+      tracks.me,
+      tracks.others,
+      clips.filter((clip) => clip.speaker === "others"),
+    );
+    if (mine.length < tracks.me.length) {
+      log(`Dropped ${tracks.me.length - mine.length} microphone segments that echoed the speakers.`);
+    }
+    return { language, turns: mergeTracks({ others: tracks.others, me: mine }) };
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }

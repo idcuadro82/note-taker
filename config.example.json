@@ -1,0 +1,5 @@
+{
+  "meetingsDir": "~/Meetings",
+  "language": "auto",
+  "model": "gemma3:12b"
+}
