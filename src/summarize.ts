@@ -3,7 +3,7 @@ import { generateJson, withOllama } from "./ollama.ts";
 import { renderTurns } from "./transcript.ts";
 import type { Transcript, Turn } from "./transcript.ts";
 
-export const DEFAULT_MODEL = process.env.OLLAMA_MODEL ?? "qwen2.5:14b";
+export const DEFAULT_MODEL = process.env.OLLAMA_MODEL ?? "gemma3:12b";
 
 export interface ActionItem {
   /** Empty when the transcript does not say who is responsible. */

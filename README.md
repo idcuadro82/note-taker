@@ -10,7 +10,7 @@ Nothing leaves your machine.
 - [Homebrew](https://brew.sh)
 - Xcode Command Line Tools (`xcode-select --install`)
 - Node 24 or later
-- About 11 GB of free disk space for the models
+- About 10 GB of free disk space for the models
 
 ## Setup on a new Mac
 
@@ -24,7 +24,7 @@ The script installs `whisper.cpp` and `ollama`, downloads the models and builds 
 Models can be changed with environment variables:
 
 ```bash
-WHISPER_MODEL=medium OLLAMA_MODEL=gemma3:12b ./scripts/setup.sh
+WHISPER_MODEL=medium OLLAMA_MODEL=qwen2.5:14b ./scripts/setup.sh
 ```
 
 ## Recording audio
@@ -59,7 +59,7 @@ for example to rewrite the notes with another model without transcribing again.
 | Option | Default | |
 |---|---|---|
 | `--language es` | auto-detect | Spoken language |
-| `--model gemma3:12b` | `qwen2.5:14b` | Ollama model that writes the notes |
+| `--model qwen2.5:14b` | `gemma3:12b` | Ollama model that writes the notes |
 
 Ollama does not need to be running: it is started for the summary and stopped
 afterwards. The notes are written by a small local model, so check names, owners

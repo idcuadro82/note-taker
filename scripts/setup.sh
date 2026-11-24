@@ -6,7 +6,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 MODELS_DIR="$REPO_DIR/models"
 WHISPER_MODEL="${WHISPER_MODEL:-large-v3-turbo}"
-OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:14b}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-gemma3:12b}"
 
 if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
   echo "This project requires a Mac with Apple Silicon." >&2
