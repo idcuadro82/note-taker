@@ -2,5 +2,6 @@
   "meetingsDir": "~/Meetings",
   "language": "auto",
   "model": "gemma3:12b",
-  "separateSpeakers": "on"
+  "separateSpeakers": "on",
+  "notes": "on"
 }

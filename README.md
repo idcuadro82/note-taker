@@ -94,7 +94,8 @@ open build/NoteTaker.app
 ```
 
 Adds a microphone icon to the menu bar to start and stop recordings without a
-terminal, with or without live captions. While recording it shows a red dot and
+terminal, with or without live captions, and to stop them with the notes, with
+only the transcript, or keeping just the audio. While recording it shows a red dot and
 the elapsed time; while the notes are being written, the menu shows the progress.
 From the menu you can also open the last notes, open the meetings folder and make
 the app start at login.
@@ -116,6 +117,7 @@ upgrading Node or moving this folder; macOS may ask for the permissions again.
 |---|---|
 | `notes status` | Shows whether a recording is in progress |
 | `notes captions` | Follows the live captions of the recording in progress |
+| `notes stop --transcript-only` | Stops and writes the transcript, without the notes |
 | `notes stop --no-notes` | Stops and keeps the audio without processing it |
 | `notes process <folder>` | Transcribes and summarizes a recorded meeting |
 | `notes transcribe <folder>` | Only writes the transcript |
@@ -132,6 +134,12 @@ To change the defaults on this Mac, copy `config.example.json` to `config.local.
 | `language` | `auto` | `--language es` | Spoken language; `auto` detects it |
 | `model` | `gemma3:12b` | `--model qwen2.5:14b` | Ollama model that writes the notes |
 | `separateSpeakers` | `on` | `--no-speakers` | Tell the other participants apart by their voices |
+| `notes` | `on` | `--transcript-only` | Write the notes; `off` stops at the transcript |
+
+Writing the notes is the heavy step: the model needs about 10 GB of memory, the
+transcript about 2 GB. With `"notes": "off"`, or **Stop and Transcribe Only** in
+the menu, you get `transcript.md` (who said what) and Ollama is never started.
+Write the notes later with `notes summarize <folder>`.
 
 Ollama does not need to be running: it is started for the summary and stopped
 afterwards. The notes are written by a small local model, so check names, owners

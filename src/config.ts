@@ -12,6 +12,8 @@ export interface Config {
   model: string;
   /** "on" to tell the other participants apart by their voices, "off" to group them. */
   separateSpeakers: string;
+  /** "on" to write the notes after transcribing, "off" to stop at the transcript. */
+  notes: string;
 }
 
 const DEFAULTS: Config = {
@@ -19,10 +21,12 @@ const DEFAULTS: Config = {
   language: "auto",
   model: "gemma3:12b",
   separateSpeakers: "on",
+  notes: "on",
 };
 
 const ALLOWED_VALUES: Partial<Record<keyof Config, string[]>> = {
   separateSpeakers: ["on", "off"],
+  notes: ["on", "off"],
 };
 
 /** Per-machine settings; not committed. See config.example.json. */

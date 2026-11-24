@@ -25,6 +25,7 @@ const USAGE = `Usage:
 Options:
   --language <code>   Spoken language (es, en..., or auto). Default: ${config.language}
   --model <name>      Ollama model for the notes. Default: ${config.model}
+  --transcript-only   With "stop" and "process": transcribe but do not write the notes.
   --no-notes          With "stop": keep the recording but do not process it.
   --no-speakers       Group the other participants instead of telling them apart.
   --json              With "status": print the state as JSON.
@@ -38,6 +39,7 @@ interface Options {
   language: string;
   model: string;
   "no-speakers": boolean;
+  "transcript-only": boolean;
 }
 
 export async function main(argv: string[]): Promise<void> {
@@ -49,6 +51,7 @@ export async function main(argv: string[]): Promise<void> {
       model: { type: "string", default: config.model },
       "no-notes": { type: "boolean", default: false },
       "no-speakers": { type: "boolean", default: false },
+      "transcript-only": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       live: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -142,6 +145,7 @@ async function status(json: boolean): Promise<void> {
       JSON.stringify({
         state,
         meetingsDir,
+        notes: config.notes === "on",
         dir: recording?.dir,
         startedAt: recording?.startedAt,
         captions: recording?.captionsPid ? path.join(recording.dir, CAPTIONS_FILE) : undefined,
@@ -162,7 +166,13 @@ async function status(json: boolean): Promise<void> {
 }
 
 async function processMeeting(meetingDir: string, options: Options): Promise<void> {
-  await writeNotes(meetingDir, await transcribe(meetingDir, options), options.model);
+  const transcript = await transcribe(meetingDir, options);
+  if (options["transcript-only"] || config.notes === "off") {
+    // The notes need far more memory and time than the transcript.
+    log(`Notes skipped. Write them later with: notes summarize "${meetingDir}"`);
+    return;
+  }
+  await writeNotes(meetingDir, transcript, options.model);
 }
 
 async function transcribe(meetingDir: string, options: Options): Promise<Transcript> {

@@ -11,6 +11,22 @@ enum RecorderState: Equatable {
     case writingNotes(directory: String)
 }
 
+/// What to do with a recording when it stops.
+enum StopMode {
+    case notes
+    /// The transcript without the notes: far lighter, the model is never loaded.
+    case transcriptOnly
+    case audioOnly
+
+    var arguments: [String] {
+        switch self {
+        case .notes: return ["stop"]
+        case .transcriptOnly: return ["stop", "--transcript-only"]
+        case .audioOnly: return ["stop", "--no-notes"]
+        }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private var cli: NotesCLI?
@@ -18,6 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var state: RecorderState = .idle
     private var progress = ""
     private var meetingsDirectory: String?
+    /// False when the settings turn the notes off: stopping only transcribes.
+    private var notesEnabled = true
+    private var stopMode = StopMode.notes
     /// True while a command started from the menu is running.
     private var busy = false
     private var clock: Timer?
@@ -47,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private struct Status: Decodable {
         let state: String
         let meetingsDir: String
+        let notes: Bool?
         let dir: String?
         let startedAt: String?
         let captions: String?
@@ -66,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self.startupError = nil
             self.meetingsDirectory = status.meetingsDir
+            self.notesEnabled = status.notes ?? true
             switch (status.state, status.dir) {
             case ("recording", let directory?):
                 let formatter = ISO8601DateFormatter()
@@ -137,14 +158,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func stopAndWriteNotes() {
-        stop(writeNotes: true)
+        stop(notesEnabled ? .notes : .transcriptOnly)
+    }
+
+    @objc private func stopAndTranscribeOnly() {
+        stop(.transcriptOnly)
     }
 
     @objc private func stopWithoutNotes() {
-        stop(writeNotes: false)
+        stop(.audioOnly)
     }
 
-    private func stop(writeNotes: Bool) {
+    private func stop(_ mode: StopMode) {
         guard let cli, !busy else { return }
         let directory: String
         switch state {
@@ -154,11 +179,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         busy = true
         captionsPanel.close()
         state = .writingNotes(directory: directory)
-        progress = writeNotes ? "Stopping…" : "Saving…"
+        stopMode = mode
+        progress = mode == .audioOnly ? "Saving…" : "Stopping…"
         render()
 
         cli.run(
-            writeNotes ? ["stop"] : ["stop", "--no-notes"],
+            mode.arguments,
             onProgress: { [weak self] line in
                 self?.progress = line
                 self?.render()
@@ -168,11 +194,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.busy = false
                 self.progress = ""
                 self.state = .idle
-                let notes = directory + "/notes.md"
+                // What "Open Last Notes" opens: the transcript when there are no notes.
+                let written = directory + (mode == .notes ? "/notes.md" : "/transcript.md")
                 if !result.succeeded {
-                    self.showError("Could not write the notes", result.errorOutput)
-                } else if writeNotes, FileManager.default.fileExists(atPath: notes) {
-                    self.lastNotes = notes
+                    let what = mode == .notes ? "write the notes" : "process the recording"
+                    self.showError("Could not " + what, result.errorOutput)
+                } else if mode != .audioOnly, FileManager.default.fileExists(atPath: written) {
+                    self.lastNotes = written
                 }
                 self.refresh()
                 self.render()
@@ -254,15 +282,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 add("Recording: " + (directory as NSString).lastPathComponent, nil)
                 menu.addItem(.separator())
                 if captions != nil { add("Show Live Captions", #selector(showCaptions)) }
-                add("Stop and Write Notes", #selector(stopAndWriteNotes), enabled: !busy)
-                add("Stop without Notes", #selector(stopWithoutNotes), enabled: !busy)
+                if notesEnabled { add("Stop and Write Notes", #selector(stopAndWriteNotes), enabled: !busy) }
+                add("Stop and Transcribe Only", #selector(stopAndTranscribeOnly), enabled: !busy)
+                add("Stop without Processing", #selector(stopWithoutNotes), enabled: !busy)
             case .interrupted(let directory):
                 add("Interrupted: " + (directory as NSString).lastPathComponent, nil)
                 menu.addItem(.separator())
-                add("Recover and Write Notes", #selector(stopAndWriteNotes), enabled: !busy)
-                add("Recover without Notes", #selector(stopWithoutNotes), enabled: !busy)
+                if notesEnabled { add("Recover and Write Notes", #selector(stopAndWriteNotes), enabled: !busy) }
+                add("Recover and Transcribe Only", #selector(stopAndTranscribeOnly), enabled: !busy)
+                add("Recover without Processing", #selector(stopWithoutNotes), enabled: !busy)
             case .writingNotes:
-                add("Writing notes…", nil)
+                switch stopMode {
+                case .notes: add("Writing notes…", nil)
+                case .transcriptOnly: add("Transcribing…", nil)
+                case .audioOnly: add("Saving…", nil)
+                }
                 if !progress.isEmpty { add(progress, nil) }
             }
         }
